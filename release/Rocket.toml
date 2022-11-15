@@ -1,0 +1,2 @@
+[default.databases.attendize]
+url = "mysql://ghxj7285_attendize:gtIcoLV1yeHPGa585nYo@localhost/ghxj7285_attendize"
