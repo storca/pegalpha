@@ -141,13 +141,17 @@ pub fn has_sport(attendee:&IdentifiedAttendee, sport_name:&str) -> bool {
  * Checks if the attendee's gender matches the sport's team gender policy (strict or mixed)
  */
 pub fn has_correct_gender(attendee:&IdentifiedAttendee, team_sport:&Sport) -> bool {
-    for sport in &attendee.sports {
-        //TODO: Suspicious code
-        if sport.gender == team_sport.gender {
-            return true;
+    match team_sport.gender {
+        // If the sport is mixed, no need to check
+        SportGender::Mixed => return true,
+        // Otherwise, team_gender and attendee.gender have to match
+        team_gender => {
+            let mut cond:bool = false;
+            cond = cond || (team_gender == SportGender::M && attendee.gender == AttendeeGender::M);
+            cond = cond || (team_gender == SportGender::F && attendee.gender == AttendeeGender::F);
+            return cond
         }
     }
-    return false;
 }
 
 /**
