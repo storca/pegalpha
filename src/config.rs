@@ -44,6 +44,17 @@ pub fn find_sport(sport: &str, gender:Option<AttendeeGender>) -> Option<Sport> {
             // Check if sport type is strict or mixed
             let sport_type = prop.get("gender");
             if sport_type.is_some() {
+                // Retrieve the allow_multiple_teams option : true by default
+                let mut allow_multiple_teams:bool = true;
+                let allow_multiple_teams_opt = prop.get("allow_multiple_teams");
+                if allow_multiple_teams_opt.is_some() {
+                    match allow_multiple_teams_opt.unwrap() {
+                        "no" => allow_multiple_teams = false,
+                        _ => allow_multiple_teams = true
+                    }
+                }
+
+                // Does the sport support mixed teams or strict teams ?
                 match sport_type.unwrap() {
                     //This sport supports mixed teams
                     "mixed" => {
@@ -55,7 +66,8 @@ pub fn find_sport(sport: &str, gender:Option<AttendeeGender>) -> Option<Sport> {
                                 name: String::from(section_name),
                                 min_players: min_opt.unwrap().parse::<u8>().unwrap(),
                                 max_players: max_opt.unwrap().parse::<u8>().unwrap(),
-                                gender: SportGender::Mixed
+                                gender: SportGender::Mixed,
+                                allow_multiple_teams: allow_multiple_teams
                             };
                             return Some(s);
                         }
@@ -79,13 +91,15 @@ pub fn find_sport(sport: &str, gender:Option<AttendeeGender>) -> Option<Sport> {
                                     return Some(Sport { name: String::from(section_name),
                                                         min_players: min_m_opt.unwrap().parse::<u8>().unwrap(), 
                                                         max_players: max_m_opt.unwrap().parse::<u8>().unwrap(), 
-                                                        gender: SportGender::M });
+                                                        gender: SportGender::M,
+                                                        allow_multiple_teams: allow_multiple_teams});
                                 },
                                 AttendeeGender::F => {
                                     return Some(Sport { name: String::from(section_name), 
                                         min_players: min_f_opt.unwrap().parse::<u8>().unwrap(), 
                                         max_players: max_f_opt.unwrap().parse::<u8>().unwrap(), 
-                                        gender: SportGender::F });
+                                        gender: SportGender::F,
+                                        allow_multiple_teams: allow_multiple_teams });
                                 }
                             }   
                         }

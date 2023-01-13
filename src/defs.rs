@@ -1,5 +1,9 @@
 use rocket::serde::{Serialize, Deserialize};
 
+/**
+ * ------ Type Definitions
+ */
+
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]
 #[serde(crate = "rocket::serde")]
 pub enum SportGender {
@@ -15,13 +19,18 @@ pub enum AttendeeGender {
     F
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct Sport {
     pub name: String,
     pub min_players: u8,
     pub max_players: u8,
-    pub gender: SportGender
+    pub gender: SportGender,
+    /**
+     * Is a school allowed to have multiple teams in this sport ?
+     * by default, yes
+     */
+    pub allow_multiple_teams: bool
 }
 
 #[derive(Serialize, Clone)]
@@ -31,7 +40,7 @@ pub struct UnidentifiedAttendee {
     pub sport: String
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct IdentifiedAttendee {
     pub id: u32,
@@ -51,7 +60,7 @@ pub struct Team {
     pub gender: SportGender
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum AttendeeStatus {
     Ok,
     InvalidSport,
@@ -59,4 +68,30 @@ pub enum AttendeeStatus {
     SportNotRegistered,
     AlreadyInATeam,
     NotAnAthlete
+}
+
+/**
+ * ------- Reponse definitions
+ */
+
+#[derive(Serialize, Clone)]
+#[serde(crate = "rocket::serde")]
+ pub enum SimpleResponseCode {
+    Ok,
+    UserError,
+    ServerError
+}
+
+#[derive(Serialize, Clone)]
+#[serde(crate = "rocket::serde")]
+pub struct SimpleResponse {
+    pub message: String,
+    pub code: SimpleResponseCode
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(crate = "rocket::serde")]
+pub struct CheckAttendeeResponse {
+    pub message: String,
+    pub attendee: Option<IdentifiedAttendee>
 }
