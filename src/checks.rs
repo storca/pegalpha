@@ -35,7 +35,7 @@ pub async fn retrieve_attendee(db: &mut MySqlConnection, order_ref:&str) -> Opti
         AND a.ticket_id IN {}
         AND o.id = a.order_id
         AND o.order_reference = ?
-        AND a.reference_index = ?", config::get_option("gender_question_id"), config::get_option("pack_ticket_ids"));
+        AND a.reference_index = ?", config::get_option("gender_question_id"), config::get_option("valid_ticket_ids"));
 
         let attendee_res = sqlx::query(&attendee_stmt).bind(split_ref[0]).bind(split_ref[1])
         .fetch_optional(&mut *db).await;
@@ -106,8 +106,8 @@ pub async fn retrieve_attendee(db: &mut MySqlConnection, order_ref:&str) -> Opti
 
         let school_fut = sqlx::query(&school_stmt).bind(attendee_id)
         .fetch_one(&mut *db);
-        let school_res = school_fut.await;
 
+        let school_res = school_fut.await;
         let school_id: u32;
         if school_res.is_err() {
             panic!("SQL error while retrieving attendee school");
@@ -143,14 +143,10 @@ pub fn has_sport(attendee:&IdentifiedAttendee, sport_name:&str) -> bool {
 pub fn has_correct_gender(attendee:&IdentifiedAttendee, team_sport:&Sport) -> bool {
     match team_sport.gender {
         // If the sport is mixed, no need to check
-        SportGender::Mixed => return true,
-        // Otherwise, team_gender and attendee.gender have to match
-        team_gender => {
-            let mut cond:bool = false;
-            cond = cond || (team_gender == SportGender::M && attendee.gender == AttendeeGender::M);
-            cond = cond || (team_gender == SportGender::F && attendee.gender == AttendeeGender::F);
-            return cond
-        }
+        SportGender::Mixed => true,
+        // Otherwise genders have to match
+        SportGender::M => attendee.gender == AttendeeGender::M,
+        SportGender::F => attendee.gender == AttendeeGender::F
     }
 }
 
@@ -214,15 +210,16 @@ pub async fn validate_attendee(db: &mut MySqlConnection, attendee:&IdentifiedAtt
     else if !is_an_athlete {
         AttendeeStatus::NotAnAthlete
     }
-    // Check if attendee is already in a team
-    else if has_team(db, attendee, sport.name.as_str()).await {
-        AttendeeStatus::AlreadyInATeam
-    }
     else if !has_sport(attendee, sport.name.as_str()){
         AttendeeStatus::SportNotRegistered
     }
+    //TODO: Invalid check here, attendee gender always matches sport.gender
     else if !has_correct_gender(attendee, sport) {
         AttendeeStatus::InvalidGender
+    }
+    // Check if attendee is already in a team
+    else if has_team(db, attendee, sport.name.as_str()).await {
+        AttendeeStatus::AlreadyInATeam
     }
     else {
         AttendeeStatus::Ok

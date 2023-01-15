@@ -19,7 +19,7 @@ pub enum AttendeeGender {
     F
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(crate = "rocket::serde")]
 pub struct Sport {
     pub name: String,
