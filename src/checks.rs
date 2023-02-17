@@ -176,7 +176,7 @@ pub async fn has_team(db: &mut MySqlConnection, attendee:&IdentifiedAttendee, sp
  * 
  * This applies the allow_multiple_teams policy
  */
-pub async fn school_has_team(db: &mut MySqlConnection, attendee:&Json<IdentifiedAttendee>, sport: &str) -> bool {
+pub async fn school_has_team(db: &mut MySqlConnection, attendee:&IdentifiedAttendee, sport: &str) -> bool {
     let row = sqlx::query("SELECT t.id FROM teams t
     JOIN question_options qo ON qo.id = t.school_id
     JOIN question_answers qa ON qa.question_id = qo.question_id

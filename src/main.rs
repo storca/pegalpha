@@ -12,6 +12,8 @@
 
 #[macro_use]extern crate rocket;
 
+use std::path::{Path, PathBuf};
+
 use rocket_db_pools::sqlx::Acquire;
 use rocket_db_pools::{sqlx, Database, Connection};
 
@@ -22,8 +24,9 @@ pub mod checks;
 use config::find_sport;
 use rocket::serde::json::Json;
 use rocket::response::Redirect;
+use rocket::fs::NamedFile;
 
-use rocket_contrib::templates::Template;
+use rocket_dyn_templates::{Template, context};
 
 use defs::*;
 use checks::*;
@@ -31,11 +34,6 @@ use checks::*;
 #[derive(Database, Clone)]
 #[database("attendize")]
 pub struct Attendize(sqlx::MySqlPool);
-
-#[get("/")]
-pub fn index() -> Redirect {
-    Redirect::to("https://european-aerostudent-games.com")
-}
 
 /**
  * API routes
@@ -59,8 +57,16 @@ pub async fn get_attendee_sports(mut db: Connection<Attendize>, order_ref: &str)
     }
 }
 
+#[get("/attendee/<order_ref>")]
+pub async fn get_attendee(mut db: Connection<Attendize>, order_ref:&str) -> Option<Json<IdentifiedAttendee>> {
+    match retrieve_attendee(&mut db, order_ref).await {
+        Some(a) => Some(Json(a)),
+        None => None
+    }
+}
+
 #[get("/attendee/check/<team_sport>/<team_gender>/<order_ref>")]
-pub async fn check_attendee(mut db: Connection<Attendize>, team_sport: &str, team_gender: &str, order_ref: &str) -> Json<CheckAttendeeResponse> {
+pub async fn get_check_attendee(mut db: Connection<Attendize>, team_sport: &str, team_gender: &str, order_ref: &str) -> Json<CheckAttendeeResponse> {
     let mut response = CheckAttendeeResponse {
         message: String::from("Error : unhandled case"),
         attendee: None
@@ -118,7 +124,7 @@ pub async fn check_attendee(mut db: Connection<Attendize>, team_sport: &str, tea
  */
 
 #[post("/team/create", format="json", data="<team>")]
-pub async fn create_team(mut db: Connection<Attendize>, team: Json<Team>) -> Json<SimpleResponse> {
+pub async fn post_create_team(mut db: Connection<Attendize>, team: Json<Team>) -> Json<SimpleResponse> {
     let attendee_gender:Option<AttendeeGender>;
     let mut response = SimpleResponse {
         message: String::from("Unhandled case"),
@@ -192,7 +198,7 @@ pub async fn create_team(mut db: Connection<Attendize>, team: Json<Team>) -> Jso
 
     match res {
         Ok(r) => team_id = r.last_insert_id(),
-        Err(e) => mysql_errored = true
+        Err(_e) => mysql_errored = true
     }
 
     // Add team members
@@ -230,13 +236,23 @@ pub async fn create_team(mut db: Connection<Attendize>, team: Json<Team>) -> Jso
 }
 
 
-#[get("/team/can_register/<sport_name>", format="json", data="<captain>")]
-pub async fn can_register(mut db: Connection<Attendize>, sport_name: &str, captain: Json<IdentifiedAttendee>) -> Json<SimpleResponse>
+#[get("/team/can_register/<sport_name>/<order_ref>")]
+pub async fn get_can_register(mut db: Connection<Attendize>, sport_name: &str, order_ref: &str) -> Json<SimpleResponse>
 {
     let mut response = SimpleResponse {
         message: String::from("Unhandled case"),
         code: SimpleResponseCode::ServerError
     };
+
+    let captain: IdentifiedAttendee;
+    match retrieve_attendee(&mut *db, order_ref).await {
+        Some(a) => captain = a,
+        None => {
+            response.message = String::from("Attendee not found");
+            response.code = SimpleResponseCode::UserError;
+            return Json(response);
+        }
+    }
 
     let sport_option = config::find_sport(sport_name, Some(captain.gender));
     let sport: Sport;
@@ -267,10 +283,71 @@ pub async fn can_register(mut db: Connection<Attendize>, sport_name: &str, capta
  * Web routes
  */
 
+#[get("/")]
+pub fn get_index() -> Redirect {
+    Redirect::to("https://european-aerostudent-games.com")
+}
+
+#[get("/static/<path..>")]
+pub async fn get_ressource(path: PathBuf) -> Option<NamedFile> {
+    NamedFile::open(Path::new("ressources/").join(path)).await.ok()
+}
+
 #[get("/welcome/<order_ref>")]
-pub async fn welcome(order_ref: &str) -> Template {
-    let context = context();
-    Template::render("welcome", &context)
+pub async fn get_welcome(mut db: Connection<Attendize>, order_ref: &str) -> Option<Template> {
+    match retrieve_attendee(&mut *db, order_ref).await {
+        Some(attendee) => {
+            let context = context! {sports: attendee.sports, order_ref: order_ref};
+            Some(Template::render("welcome", &context))
+        }
+        None => None
+    }
+}
+
+/**
+ * ------ Team routes ------
+ */
+
+/**
+ * Page where user compose their team
+ */
+#[get("/compose/<order_ref>/<sport>")]
+pub async fn get_compose(mut db: Connection<Attendize>, order_ref: &str, sport: &str) -> Option<Template> {
+    match retrieve_attendee(&mut *db, order_ref).await {
+        Some(id_attendee) => {
+            match find_sport(sport, Some(id_attendee.gender)) {
+                Some(sport) => {
+                    match validate_attendee(&mut *db, &identified_attendee, &sport).await {
+                        AttendeeStatus::Ok => {
+                            let context = context! {captain: identified_attendee};
+                            Some(Template::render("compose_team", &context))
+                        },
+                        _ => None
+                    }
+                }
+                None => None
+            }
+        },
+        None => None
+    }
+}
+
+#[get("/test")]
+pub async fn get_test() -> Option<Template> {
+    let mut mock_data: Vec<TeamMember> = vec!();
+    for i in 1..10 {
+        mock_data.push(
+            TeamMember { 
+                id: i, 
+                first_name: String::from(format!("first name {i}")), 
+                last_name: String::from(format!("last name {i}")), 
+                school: String::from("School"),
+                sports: vec![String::from("Beach volley"), String::from("Rugby")] 
+            }
+        );
+    }
+    let context = context! {team: mock_data};
+    Some(Template::render("view_team", &context))
 }
 
 #[launch]
@@ -278,6 +355,20 @@ fn rocket() -> rocket::Rocket<rocket::Build> {
     rocket::build()
         .attach(Attendize::init())
         .attach(Template::fairing())
-        .mount("/api/", routes![check_attendee, get_attendee_sports, create_team, can_register])
-        .mount("/", routes![index])
+        .mount("/api/", routes![
+            get_attendee, 
+            get_check_attendee, 
+            get_attendee_sports, 
+            post_create_team, 
+            get_can_register
+        ])
+        .mount("/", routes![
+            get_index, 
+            get_ressource, 
+            get_welcome
+        ])
+        .mount("/team", routes![
+            get_test,
+            get_compose
+        ])
 }
