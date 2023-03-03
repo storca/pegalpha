@@ -1,0 +1,45 @@
+{% extends "base" %}
+
+{% block head %}
+<style>
+    ul, li{
+        font-family: 'Noto Sans', sans-serif;
+        color: var(--text-color);
+        text-align: center;
+    }
+    .attendee-reference {
+        width: 50%;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+</style>
+{% endblock head %}
+
+{% block body %}
+<img class="eag-logo" src="/static/eag-logo-white.png">
+<h1>What is the attendee reference and where can I find it ?</h1>
+<p>
+    The <b>attendee reference</b> can be found on your tickets as shown below.
+</p>
+<img class="attendee-reference" src="/static/attendee_reference.png">
+<p>In this case, the <b>attendee reference</b> is <code>cdEXv142-1</code></p>
+<hr>
+<h1>Common issues</h1>
+<ul>
+    <li>Somestimes it is hard to distinguish betwen <b>I (capital i)</b>, <b>1 (digit one)</b> and <b>l (lowercase L)</b>, keep this in mind when filling in the <b>attendee reference</b>.</li>
+    <li>The <b>attendee reference</b> is <b>case sensitive</b>!</li>
+</ul>
+<p>Here are some examples of attendee references.</p>
+<ul>
+    <li>Hyg5dy8i-2</li>
+    <li>Ml74zs5-1</li>
+    <li>Hvqp6qg7-1</li>
+    <li>Mlgs67j-12</li>
+</ul>
+<hr>
+<h1>Issues with registration?</h1>
+<p>For <b>common issues</b> with team registration, contact <a href="mailto:leo.dusart@european-aerostudent-games.com">leo.dusart@european-aerostudent-games.com</a></p>
+<p>For <b>technical issues</b>, contact <a href="mailto:thomas.epailly@european-aerostudent-games.com">thomas.epailly@european-aerostudent-games.com</a></p>
+<hr>
+{% endblock body %}

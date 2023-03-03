@@ -1,0 +1,198 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600&family=Open+Sans:wght@300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600&family=Noto+Sans&family=Open+Sans:wght@300&display=swap');
+
+:root {
+    --bg-color: #000E3D;
+    --text-color: #FEFDFF;
+    --success-color: #62A87C;
+    --error-color: #FF007F;
+    --disabled-color: #9798AC;
+}
+
+h1 {
+    color: var(--text-color);
+    font-family: 'Montserrat', sans-serif;
+    text-align: center;
+}
+
+h2 {
+    color: var(--text-color);
+    font-family: 'Montserrat', sans-serif;
+    text-align: center;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+p {
+    font-family: 'Noto Sans', sans-serif;
+    color: var(--text-color);
+    text-align: center;
+}
+
+form {
+    width: 20%;
+    margin: 0 auto;
+}
+  
+label {
+    font-family: 'Noto Sans', sans-serif;
+    font-size: 16px;
+    margin-bottom: 5px;
+    display: block;
+}
+
+select {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 20px;
+    margin-top: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    text-align: center;
+    font-family: 'Noto Sans', sans-serif;
+}
+
+input[type="submit"] {
+    width: 100%;
+    background-color: var(--success-color);
+    color: var(--text-color);
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 15px;
+}
+
+input[type="submit"]:disabled {
+    width: 100%;
+    background-color: var(--disabled-color);
+    color: var(--text-color);
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 15px;
+}
+
+.text {
+    font-family: 'Noto Sans', sans-serif;
+    color: var(--text-color);
+    text-align: center;
+}
+
+.container {
+    position: absolute;
+    top: 30%;
+    transform: translateY(-30%);
+}
+
+.eag-logo {
+    width: 15%;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.alert {
+    display: none;
+    margin-left: auto;
+    margin-right: auto;
+    width: fit-content;
+    padding: 20px;
+    background-color: var(--error-color); /* Red */
+    color: var(--text-color);
+    font-family: 'Montserrat', sans-serif;
+    text-align: center;
+    margin-bottom: 15px;
+  }
+  
+/* The close button */
+.closebtn {
+    margin-left: 15px;
+    color: white;
+    font-weight: bold;
+    float: right;
+    font-size: 22px;
+    line-height: 20px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+/* When moving the mouse over the close button */
+.closebtn:hover {
+    color: black;
+}
+
+/* Table styling */
+li {
+    list-style-type: none;
+}
+ul {
+    margin: 5px;
+    padding: 0px;
+}
+
+table {
+    width: 60%;
+    text-align: center;
+}
+
+.team-table {
+    border-color: var(--disabled-color);
+    font-family: 'Noto Sans', sans-serif;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.team-row {
+    font-size: medium;
+    list-style-type: none;
+}
+
+.team-header {
+    font-size: large;
+}
+
+input:invalid {
+    background-color: lightpink;
+}
+input:valid {
+    background-color: var(--success-color);
+}
+
+.green-button {
+    background-color: var(--success-color);
+    color: var(--text-color);
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 15px;
+}
+
+input[type="text"] {
+    color: var(--text-color);
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    margin-left: 20px;
+    margin-right: 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 15px;
+}
+
+input[type="text"]::placeholder {
+    color: var(--disabled-color);
+}

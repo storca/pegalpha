@@ -1,0 +1,149 @@
+{% extends "team_base" %}
+
+{% block script %}
+<script type="text/javascript">
+    let last_index = 0;
+    let nb_members = 1;
+    let references = ['{{captain_ref}}'];
+
+    function displayError(message) {
+        let error = document.getElementById("error-message");
+        error.innerHTML = "<span class=\"closebtn\" onclick=\"this.parentElement.style.display=\'none\';\">&times;</span>"
+        error.innerHTML += message;
+        error.style.display = "block";
+    }
+    function addMember(member, ref) {
+        if(nb_members < {{sport.max_players}})
+        {
+            if(references.includes(ref)) {
+                displayError(`${member.first_name} ${member.last_name} is already in the team!`);
+                return;
+            }
+            let sports_list = document.createElement('ul');
+            for(const sport of member.sports) {
+                let li = document.createElement('li');
+                li.innerHTML = sport;
+                sports_list.appendChild(li);
+            }
+            let table = document.getElementById("team-table");
+            let row = table.insertRow(-1);
+            row.insertCell(-1).innerHTML = member.first_name;
+            row.insertCell(-1).innerHTML = member.last_name;
+            row.insertCell(-1).innerHTML = member.school;
+            row.insertCell(-1).appendChild(sports_list);
+            nb_members = nb_members + 1;
+            references.push(ref);
+        }
+        else {
+            displayError('{{sport.name}} allows a maximum of {{sport.max_players}} players per team');
+        }
+    }
+    function handleAdd(event) {
+        let order_ref = document.getElementById('attendee-ref').value;
+        document.getElementById('attendee-ref').value = '';
+        let button = document.getElementById('member-submit');
+        button.disabled = true;
+
+        fetch(`/api/attendee/check/{{sport.name}}/{{sport.gender}}/${order_ref}`)
+        .then(response => response.json())
+        .then(data => {
+            if(data.member == null) {
+                displayError(data.message);
+            }
+            else {
+                addMember(data.member, order_ref);
+            }
+        });
+
+        button.disabled = false;
+        event.preventDefault();
+    }
+
+    function handleSubmit(event) {
+        if(nb_members < {{sport.min_players}}) {
+            displayError('{{sport.name}} requires at least {{sport.min_players}} players per team');
+        }
+        let team = {
+            name: document.getElementById('team-name').value,
+            school_id: {{school_id}},
+            sport: '{{sport.name}}',
+            refs: references,
+            gender: '{{sport.gender}}'
+        };
+
+        fetch('/api/team/create',
+        {
+            method: 'POST',
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(team)
+        })
+        .then(response => response.json())
+        .then(json => {
+            if(json.code != "Ok") {
+                displayError(json.message);
+            }
+            else {
+                window.location.href = '/team/success'
+            }
+        });
+        event.preventDefault();
+    }
+
+    window.onload = function() {
+        let memberForm = document.getElementById("add-member-form");
+        memberForm.addEventListener('submit', handleAdd);
+        let teamForm = document.getElementById("team-form");
+        teamForm.addEventListener('submit', handleSubmit);
+    }
+</script>
+<style>
+    .help-btn {
+        background-color: var(--disabled-color);
+        color: var(--text-color);
+        padding: 14px 20px;
+        margin-bottom: 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: 'Montserrat', sans-serif;
+        font-size: 15px;
+    }
+</style>
+{% endblock script %}
+
+{% block above_table %}
+<form id="add-member-form">
+    <p>Enter the <b>attendee reference</b> of each of your team members below</p>
+    <label for="attendee-ref">Attendee reference</label>
+    <input type="text" id="attendee-ref" spellcheck="false" pattern="^[a-zA-Z0-9]{7,8}-[1-9]{1,2}$" title="Attendee reference, eg : Cy4st8O-2" placeholder="Hyg5h0f-2" required/>
+    <button type="submit" id="member-submit" class="green-button">Add</button>
+</form>
+<div id="error-message" class="alert"></div>
+
+{% endblock above_table %}
+
+{% block team_content %}
+    <tr>
+        <td>{{captain.first_name}}</td>
+        <td>{{captain.last_name}}</td>
+        <td>{{captain.school}}</td>
+        <td>
+            <ul>
+                {% for sport in captain.sports %}
+                <li>{{sport}}</li>
+                {% endfor %}
+            </ul>
+        </td>
+    </tr>
+{% endblock team_content %}
+
+{% block below_table %}
+<form id="team-form" style="margin-top: 30px;">
+    <label for="team-name">Team name</label>
+    <input id="team-name" type="text" style="background-color: gray; width: 80%;" placeholder="Les Sangliers de Dakar, FC ENAC 1" pattern="^[a-zA-Z0-9 éàêùü]{1,64}" title="Remove weird accents, max 64 characters" required>
+    <input type="submit" value="Create Team">
+</form>
+<p><button class="help-btn" onclick="window.location.href='/team/help'">Help?</button></p>
+{% endblock below_table %}

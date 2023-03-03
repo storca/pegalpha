@@ -1,7 +1,5 @@
 use std::env;
 use ini::Ini;
-use rocket::log::private::warn;
-
 use crate::defs::*;
 
 pub fn get_option(opt_name: &str) -> String {
@@ -29,7 +27,7 @@ pub fn get_option(opt_name: &str) -> String {
     panic!("Missing section [main] in configuration file");
 }
 
-pub fn find_sport(sport: &str, gender:Option<AttendeeGender>) -> Option<Sport> {
+pub fn find_sport(sport: &str, gender:Option<AttendeeGender>) -> Result<Sport, String> {
     let filename = env::var("EAG_API_CONFIG");
     let i: Ini;
     if filename.is_err() {
@@ -44,14 +42,11 @@ pub fn find_sport(sport: &str, gender:Option<AttendeeGender>) -> Option<Sport> {
             // Check if sport type is strict or mixed
             let sport_type = prop.get("gender");
             if sport_type.is_some() {
-                // Retrieve the allow_multiple_teams option : true by default
-                let mut allow_multiple_teams:bool = true;
-                let allow_multiple_teams_opt = prop.get("allow_multiple_teams");
-                if allow_multiple_teams_opt.is_some() {
-                    match allow_multiple_teams_opt.unwrap() {
-                        "no" => allow_multiple_teams = false,
-                        _ => allow_multiple_teams = true
-                    }
+                let max_teams_per_school:u8;
+
+                match prop.get("max_teams_per_school") {
+                    Some(o) => max_teams_per_school = o.parse().unwrap(),
+                    None => return Err(format!("Missing max_teams_per_school in [{section_name}]"))
                 }
 
                 // Does the sport support mixed teams or strict teams ?
@@ -67,13 +62,12 @@ pub fn find_sport(sport: &str, gender:Option<AttendeeGender>) -> Option<Sport> {
                                 min_players: min_opt.unwrap().parse::<u8>().unwrap(),
                                 max_players: max_opt.unwrap().parse::<u8>().unwrap(),
                                 gender: SportGender::Mixed,
-                                allow_multiple_teams: allow_multiple_teams
+                                max_teams_per_school: max_teams_per_school
                             };
-                            return Some(s);
+                            return Ok(s);
                         }
                         else {
-                            warn!("Missing fields under [{}], it sould include fields \'min\' and \'max\'", section_name);
-                            return None;
+                            return Err(format!("Missing fields under [{section_name}], it sould include fields \'min\' and \'max\'"));
                         }
                     }
                     //This sport supports only one gender per team
@@ -83,37 +77,37 @@ pub fn find_sport(sport: &str, gender:Option<AttendeeGender>) -> Option<Sport> {
                         let min_f_opt = prop.get("minF");
                         let max_f_opt = prop.get("maxF");
                         if min_m_opt.is_none() || max_m_opt.is_none() || min_f_opt.is_none() || max_f_opt.is_none() {
-                            warn!("Missing fields under [{}], it sould include fields \'minM\', \'maxM\', \'maxF\' and \'maxF\'", section_name);
+                            return Err(format!("Missing fields under [{section_name}], it sould include fields \'minM\', \'maxM\', \'maxF\' and \'maxF\'"))
                         }
                         if gender.is_some() {
                             match gender.unwrap() {
                                 AttendeeGender::M => {
-                                    return Some(Sport { name: String::from(section_name),
+                                    return Ok(Sport { name: String::from(section_name),
                                                         min_players: min_m_opt.unwrap().parse::<u8>().unwrap(), 
                                                         max_players: max_m_opt.unwrap().parse::<u8>().unwrap(), 
                                                         gender: SportGender::M,
-                                                        allow_multiple_teams: allow_multiple_teams});
+                                                        max_teams_per_school: max_teams_per_school});
                                 },
                                 AttendeeGender::F => {
-                                    return Some(Sport { name: String::from(section_name), 
+                                    return Ok(Sport { name: String::from(section_name), 
                                         min_players: min_f_opt.unwrap().parse::<u8>().unwrap(), 
                                         max_players: max_f_opt.unwrap().parse::<u8>().unwrap(), 
                                         gender: SportGender::F,
-                                        allow_multiple_teams: allow_multiple_teams });
+                                        max_teams_per_school: max_teams_per_school });
                                 }
                             }   
                         }
                         else {
-                            warn!("Sport {} is strict and attendee gender is required", section_name);
+                            return Err(format!("Sport {section_name} is strict and attendee gender is required"));
                         }
                     }
                     // When type option is not valid 
                     _other => {
-                        warn!("Invalid sport type under [{}], is has to be either \'mixed\' or \'strict\' : \'{}\' is invalid", section_name, _other);
+                        return Err(format!("Invalid sport type under [{section_name}], is has to be either \'mixed\' or \'strict\' : \'{_other}\' is invalid"))
                     } 
                 }
             }
         }
     }
-    return None;
+    return Err(String::from("Unknown error"));
 }

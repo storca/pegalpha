@@ -1,0 +1,59 @@
+{% extends "base" %}
+
+{% block head %}
+<script type="text/javascript">
+    function displayError(message) {
+        let error = document.getElementById("error-message");
+        error.innerHTML += message;
+        error.style.display = "block";
+    }
+    function handleSubmit(event) {
+        let sport = document.getElementById("sport-options").value;
+        let button = document.getElementById("form-button");
+        button.disabled = true;
+
+        let attendee = null;
+
+        fetch(
+            '/api/team/can_register/' + sport + '/{{order_ref}}',
+        )
+        .then(data => data.json())
+        .then( data => {
+            if(data.code != "Ok") {
+                displayError(data.message);
+            }
+            else {
+                window.location.href = '/team/compose/{{order_ref}}/' + sport;
+            }
+        });
+        event.preventDefault();
+    }
+
+    window.onload = function() {
+        let form = document.getElementById("sport-form");
+        form.addEventListener("submit", handleSubmit);
+    }
+</script>
+{% endblock head %}
+
+{% block body %}
+<div class="container">
+    <img class="eag-logo" src="/static/eag-logo-white.png">
+    <h1>Team registration</h1>
+    <h2>Welcome to the EAG team registration 2023 !</h2> 
+    <div>
+        <div id="error-message" class="alert">
+            <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
+        </div>
+        <form id="sport-form" action="/team" method="GET" class="centered">
+            <label for="options" class="text">Choose your team's sport below to get started</label>
+                <select id="sport-options">
+                    {% for sport in sports %}
+                        <option value="{{sport.name}}">{{sport.name}}</option>
+                    {% endfor %}
+                </select>
+            <input id="form-button" type="submit" value="Get started">
+        </form>
+    </div>
+</div>
+{% endblock body %}

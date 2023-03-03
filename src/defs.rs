@@ -1,5 +1,3 @@
-use std::process::id;
-
 use rocket::serde::{Serialize, Deserialize};
 
 use rocket_db_pools::sqlx::Row;
@@ -18,6 +16,7 @@ pub enum SportGender {
     Mixed
 }
 
+
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]
 #[serde(crate = "rocket::serde")]
 pub enum AttendeeGender {
@@ -33,10 +32,9 @@ pub struct Sport {
     pub max_players: u8,
     pub gender: SportGender,
     /**
-     * Is a school allowed to have multiple teams in this sport ?
-     * by default, yes
+     * How much teams a school is allowed to have in this sport ?
      */
-    pub allow_multiple_teams: bool
+    pub max_teams_per_school: u8
 }
 
 #[derive(Serialize, Clone)]
@@ -59,7 +57,6 @@ pub struct IdentifiedAttendee {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct TeamMember {
-    pub id: u32,
     pub first_name: String,
     pub last_name: String,
     pub school: String,
@@ -67,21 +64,23 @@ pub struct TeamMember {
 }
 
 impl TeamMember {
-    pub async fn from_indentified_attendee(&self, attendee: IdentifiedAttendee, db: &mut MySqlConnection) -> Self {
+    pub async fn from_indentified_attendee(attendee: &IdentifiedAttendee, db: &mut MySqlConnection) -> TeamMember {
         let attendee_name = sqlx::query("SELECT first_name, last_name FROM attendees WHERE id = ?")
         .bind(attendee.id).fetch_one(&mut *db).await;
         match attendee_name {
             Ok(row) => {
+                let school_name_fut = sqlx::query("SELECT name FROM question_options WHERE id = ?")
+                .bind(attendee.school_id).fetch_one(&mut *db);
+
                 let mut sports:Vec<String> = vec!();
                 for sport in &attendee.sports {
                     sports.push(String::from(&sport.name));
                 }
 
                 let tm:TeamMember = TeamMember { 
-                    id: attendee.id, 
                     first_name: String::from(row.get::<&str, usize>(0)), 
                     last_name: String::from(row.get::<&str, usize>(1)),
-                    school: String::from("School"),
+                    school: school_name_fut.await.unwrap().get::<String, usize>(0),
                     sports: sports 
                 };
                 return tm;
@@ -134,5 +133,5 @@ pub struct SimpleResponse {
 #[serde(crate = "rocket::serde")]
 pub struct CheckAttendeeResponse {
     pub message: String,
-    pub attendee: Option<IdentifiedAttendee>
+    pub member: Option<TeamMember>
 }

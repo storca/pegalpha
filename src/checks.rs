@@ -2,8 +2,6 @@ use rocket_db_pools::{sqlx};
 use rocket_db_pools::sqlx::Row;
 use rocket_db_pools::sqlx::mysql::{MySqlConnection, MySqlRow};
 
-use rocket::serde::json::Json;
-
 use crate::defs::*;
 use crate::config;
 
@@ -32,10 +30,9 @@ pub async fn retrieve_attendee(db: &mut MySqlConnection, order_ref:&str) -> Opti
         AND qa.attendee_id = a.id
         AND qa.question_id = {}
         AND a.is_cancelled = 0
-        AND a.ticket_id IN {}
         AND o.id = a.order_id
         AND o.order_reference = ?
-        AND a.reference_index = ?", config::get_option("gender_question_id"), config::get_option("valid_ticket_ids"));
+        AND a.reference_index = ?", config::get_option("gender_question_id"));
 
         let attendee_res = sqlx::query(&attendee_stmt).bind(split_ref[0]).bind(split_ref[1])
         .fetch_optional(&mut *db).await;
@@ -92,7 +89,7 @@ pub async fn retrieve_attendee(db: &mut MySqlConnection, order_ref:&str) -> Opti
             let sport_name:String = row.get(0);
             
             let sport = config::find_sport(sport_name.as_str(), Some(gender));
-            if sport.is_some() { //Ignore sports that are not in the config file (individual sports)
+            if sport.is_ok() { //Ignore sports that are not in the config file (individual sports)
                 sports.push(sport.unwrap());
             }
         }
@@ -164,29 +161,32 @@ pub async fn has_team(db: &mut MySqlConnection, attendee:&IdentifiedAttendee, sp
     match row {
         Ok(o) => 
             match o {
-                Some(_r) => false,
-                None => true
+                Some(_r) => true,
+                None => false
             },
         Err(e) => panic!("MySQL error during team registration test : {e:?}")
     }
 }
 
 /**
- * Checks if a team is allowed to register in a given sport
+ * Checks if a school's team is allowed to register in a given sport
  * 
- * This applies the allow_multiple_teams policy
+ * This applies the max_teams_per_school policy
  */
-pub async fn school_has_team(db: &mut MySqlConnection, attendee:&IdentifiedAttendee, sport: &str) -> bool {
-    let row = sqlx::query("SELECT t.id FROM teams t
+pub async fn can_school_register_team(db: &mut MySqlConnection, attendee:&IdentifiedAttendee, sport: &Sport) -> bool {
+    let row = sqlx::query("SELECT COUNT(*) FROM teams t
     JOIN question_options qo ON qo.id = t.school_id
     JOIN question_answers qa ON qa.question_id = qo.question_id
-    WHERE qa.attendee_id = ? AND t.sport = ?").bind(attendee.id).bind(sport).fetch_optional(&mut *db).await;
+    WHERE qa.attendee_id = ? AND t.sport = ?").bind(attendee.id).bind(&sport.name).fetch_one(&mut *db).await;
 
     match row {
-        Ok(o) => {
-            match o {
-                Some(_r) => true,
-                None => false
+        Ok(r) => {
+            match u8::try_from(r.get::<i64, usize>(0)) {
+                Ok(school_nb_teams) => {
+                    // Return this condition
+                    school_nb_teams < sport.max_teams_per_school
+                }
+                Err(e) => panic!("{e:?}")
             }
         }
         Err(e) => panic!("MySQL error during team school check : {e:?}")
@@ -218,10 +218,48 @@ pub async fn validate_attendee(db: &mut MySqlConnection, attendee:&IdentifiedAtt
         AttendeeStatus::InvalidGender
     }
     // Check if attendee is already in a team
-    else if has_team(db, attendee, sport.name.as_str()).await {
+    else if has_team(&mut *db, attendee, sport.name.as_str()).await {
         AttendeeStatus::AlreadyInATeam
     }
     else {
         AttendeeStatus::Ok
     }
+}
+
+pub async fn validate_team(db: &mut MySqlConnection, team:&Team, sport: Sport) -> Result<Vec<IdentifiedAttendee>, String> {
+    // Check for duplicate references
+    for reference in &team.refs {
+        let count = team.refs.iter().filter(|&r| *r == *reference).count();
+        if count > 1 {
+            return Err(String::from("The same order reference was found at least twice in payload"));
+        }
+    }
+
+    // Re-validate attendees
+    let mut attendee_list:Vec<IdentifiedAttendee> = Vec::new();
+    for reference in &team.refs {
+        let attendee = retrieve_attendee(&mut *db, reference.as_str()).await;
+        if attendee.is_none() {
+            return Err(format!("Order reference \'{reference}\' is invalid"));
+        }
+        else {
+            let id_attendee = attendee.unwrap();
+            let status = validate_attendee(&mut *db, &id_attendee, &sport).await;
+            if  status != AttendeeStatus::Ok {
+                let m = TeamMember::from_indentified_attendee(&id_attendee, &mut *db).await;
+                return Err(format!("{} {} ({reference}) causes a validation error, code:{:?}", m.first_name, m.last_name, status));
+            }
+            else {
+                attendee_list.push(id_attendee);
+            }
+        }
+    }
+    //Check matching school ids
+    let captain = attendee_list.first().unwrap();
+    for member in &attendee_list {
+        if captain.school_id != member.school_id {
+            return Err(format!("Members of a team should all come from the same school"));
+        }
+    }
+    Ok(attendee_list)
 }

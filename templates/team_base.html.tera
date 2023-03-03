@@ -1,0 +1,21 @@
+{% extends "base" %}
+
+{% block body %}
+<img class="eag-logo" src="/static/eag-logo-white.png">
+{% block above_table %}
+{% endblock above_table %}
+<table class="team-table" id="team-table">
+    <tbody>
+        <tr>
+            <th>First name</th>
+            <th>Last name</th>
+            <th>School</th>
+            <th>Registered sports</th>
+        </tr>
+        {% block team_content %}
+        {% endblock team_content %}
+    </tbody>
+</table>
+{% block below_table %}
+{% endblock below_table %}
+{% endblock body %}

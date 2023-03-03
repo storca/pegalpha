@@ -25,6 +25,7 @@ use config::find_sport;
 use rocket::serde::json::Json;
 use rocket::response::Redirect;
 use rocket::fs::NamedFile;
+use rocket::Request;
 
 use rocket_dyn_templates::{Template, context};
 
@@ -69,7 +70,7 @@ pub async fn get_attendee(mut db: Connection<Attendize>, order_ref:&str) -> Opti
 pub async fn get_check_attendee(mut db: Connection<Attendize>, team_sport: &str, team_gender: &str, order_ref: &str) -> Json<CheckAttendeeResponse> {
     let mut response = CheckAttendeeResponse {
         message: String::from("Error : unhandled case"),
-        attendee: None
+        member: None
     };
 
     let attendee = retrieve_attendee(&mut db, order_ref).await;
@@ -88,24 +89,27 @@ pub async fn get_check_attendee(mut db: Connection<Attendize>, team_sport: &str,
             }
 
             let sport = find_sport(team_sport, Some(gender));
-            if sport.is_none() {
+            if sport.is_err() {
                 response.message = String::from("Participant has an invalid sport name or sport is unavailable");
                 return Json(response);
             }
 
+            let m = TeamMember::from_indentified_attendee(&id_attendee, &mut *db).await;
+            let fullname = format!("{} {}", m.first_name, m.last_name);
+
             match validate_attendee(&mut db, &id_attendee, &sport.unwrap()).await {
                 AttendeeStatus::SportNotRegistered => 
-                    response.message = String::from("Participant did not register in the correct sport"),
+                    response.message = format!("{fullname} did not register in {team_sport}"),
                 AttendeeStatus::InvalidSport => 
-                    response.message = String::from("Participant has an invalid sport name or sport is unavailable"),
+                    response.message = format!("{fullname} has an invalid sport name or sport is unavailable"),
                 AttendeeStatus::AlreadyInATeam =>
-                    response.message = String::from("Participant is already in a team"),
+                    response.message = format!("{fullname} is already in a {team_sport} team"),
                 AttendeeStatus::NotAnAthlete =>
-                    response.message = String::from("Participant is a supporter, not an athlete"),
+                    response.message = format!("{fullname} is a supporter, not an athlete"),
                 AttendeeStatus::InvalidGender =>
                     response.message = String::from(format!("{team_sport} does not allow mixed teams, every team member must be of gender {team_gender}")),
                 AttendeeStatus::Ok => {
-                    response.attendee = Some(id_attendee);
+                    response.member = Some(TeamMember::from_indentified_attendee(&id_attendee, &mut *db).await);
                     response.message = String::from("Ok");
                 }
             }
@@ -130,69 +134,60 @@ pub async fn post_create_team(mut db: Connection<Attendize>, team: Json<Team>) -
         message: String::from("Unhandled case"),
         code: SimpleResponseCode::ServerError
     };
-
     // Check number of team members
     match team.gender {
         SportGender::M => attendee_gender = Some(AttendeeGender::M),
         SportGender::F => attendee_gender = Some(AttendeeGender::F),
         SportGender::Mixed => attendee_gender = None
     }
-
-    let sport_option = config::find_sport(&team.sport, attendee_gender);
-    let sport: &Sport;
-    if sport_option.is_none() {
-        response.message = String::from("Invalid \'sport\' field in JSON payload");
-        response.code = SimpleResponseCode::UserError;
-        return Json(response);
-    }
-    else {
-        sport = sport_option.as_ref().unwrap();
-        let nb_members = team.refs.len();
-        if nb_members <= usize::from(sport.min_players) || nb_members >= usize::from(sport.max_players) {
-            response.message = String::from("Invalid number of team members");
-            response.code = SimpleResponseCode::UserError;
-            return Json(response);
-        }
-    }
-
-    // Re-validate attendees
-    let mut attendee_list:Vec<IdentifiedAttendee> = Vec::new();
-    for reference in &team.refs {
-        let attendee = retrieve_attendee(&mut db, reference.as_str()).await;
-        if attendee.is_none() {
-            response.message = String::from("An invalid order reference was sent while creating a team, contact the webmaster");
-            response.code = SimpleResponseCode::UserError;
-            return Json(response);
-        }
-        else {
-            let id_attendee = attendee.unwrap();
-            let status = validate_attendee(&mut db, &id_attendee, &sport).await;
-            if  status != AttendeeStatus::Ok {
-                response.message = String::from(format!("Participant {reference} causes a validation error, status is {:?}", status));
+    let sport:Sport;
+    match config::find_sport(&team.sport, attendee_gender) {
+        Ok(s) => {
+            sport = s;
+            let nb_members = team.refs.len();
+            if nb_members < usize::from(sport.min_players) || nb_members > usize::from(sport.max_players) {
+                let min = sport.min_players;
+                let max = sport.max_players;
+                response.message = format!("Invalid number of team members, is should be between {min} and {max} and not {nb_members}");
                 response.code = SimpleResponseCode::UserError;
                 return Json(response);
             }
-            else {
-                attendee_list.push(id_attendee);
-            }
         }
-    }
-
-    //Check matching school ids
-    let captain = attendee_list.first().unwrap();
-    for member in &attendee_list {
-        if captain.school_id != member.school_id {
-            let member_id = member.id;
-            response.message = String::from(format!("Members of a team should all come from the same school, attendee #{member_id} does not"));
+        Err(_e) => {
+            response.message = String::from("Invalid \'sport\' field in JSON payload");
             response.code = SimpleResponseCode::UserError;
             return Json(response);
         }
     }
 
+    let attendee_list:Vec<IdentifiedAttendee>;
+    match validate_team(&mut *db, &team, sport).await {
+        Ok(al) => attendee_list = al,
+        Err(e) => {
+            response.message = e;
+            response.code = SimpleResponseCode::UserError;
+            return Json(response);
+        }
+    }
+
+    let captain_id = attendee_list[0].id;
+
     // Create the new team
     // Let this be a transaction, because of multiple INSERT statements
-    let mut tx = (&mut db).begin().await.unwrap();
-    let res = sqlx::query("INSERT INTO teams(name, sport) VALUES (?,?)").bind(&team.name).bind(&team.sport).execute(&mut tx).await;
+    let mut tx = (&mut *db).begin().await.unwrap();
+    let res = sqlx::query("INSERT INTO teams(school_id, name, captain_id, uuid, sport, gender) VALUES (?,?,?,UUID(),?,?)")
+        .bind(&team.school_id)
+        .bind(&team.name)
+        .bind(captain_id)
+        .bind(&team.sport)
+        .bind(
+            match &team.gender {
+                SportGender::M => "Male",
+                SportGender::F => "Female",
+                SportGender::Mixed => "Mixed"
+            }
+        )
+        .execute(&mut tx).await;
     let mut team_id:u64 = 0;
     let mut mysql_errored = false;
 
@@ -254,26 +249,38 @@ pub async fn get_can_register(mut db: Connection<Attendize>, sport_name: &str, o
         }
     }
 
-    let sport_option = config::find_sport(sport_name, Some(captain.gender));
-    let sport: Sport;
-    if sport_option.is_none() {
-        response.message = String::from("Sport not found");
-        response.code = SimpleResponseCode::UserError;
-    }
-    else {
-        sport = sport_option.unwrap();
-        if sport.allow_multiple_teams {
-            response.message = String::from("Ok");
-            response.code = SimpleResponseCode::Ok;
-        }
-        else {
-            match school_has_team(&mut *db, &captain, sport_name).await {
-                true => response.message = String::from(format!("Your school has already registered a team in this sport, in {sport_name} it is not possible to register multiple teams")),
-                false => {
+    match config::find_sport(sport_name, Some(captain.gender)) {
+        Ok(sport) => {
+            match can_school_register_team(&mut *db, &captain, &sport).await {
+                true => {
                     response.message = String::from("Ok");
                     response.code = SimpleResponseCode::Ok;
                 }
+                false => {
+                    response.message = String::from(format!(
+                        "Your school has already registered {max_teams_per_school} teams in this sport, in {sport_name} it is not possible to register more teams", 
+                        max_teams_per_school = sport.max_teams_per_school, 
+                        sport_name = sport.name)
+                    );
+                    response.code = SimpleResponseCode::UserError;
+                    return Json(response);
+                }
             }
+            match validate_attendee(&mut *db, &captain, &sport).await {
+                AttendeeStatus::Ok => {
+                    response.message = String::from("Ok");
+                    response.code = SimpleResponseCode::Ok;
+                }
+                other => {
+                    response.message = format!("You cannot register a team, code:{:?}", other);
+                    response.code = SimpleResponseCode::UserError;
+                }
+            }
+        }
+        Err(e) => {
+            warn!("{}", e);
+            response.message = String::from("Sport not found");
+            response.code = SimpleResponseCode::UserError;
         }
     }
     return Json(response);
@@ -311,34 +318,38 @@ pub async fn get_welcome(mut db: Connection<Attendize>, order_ref: &str) -> Opti
 /**
  * Page where user compose their team
  */
-#[get("/compose/<order_ref>/<sport>")]
-pub async fn get_compose(mut db: Connection<Attendize>, order_ref: &str, sport: &str) -> Option<Template> {
+#[get("/compose/<order_ref>/<sport_name>")]
+pub async fn get_compose(mut db: Connection<Attendize>, order_ref: &str, sport_name: &str) -> Option<Template> {
     match retrieve_attendee(&mut *db, order_ref).await {
         Some(id_attendee) => {
-            match find_sport(sport, Some(id_attendee.gender)) {
-                Some(sport) => {
-                    match validate_attendee(&mut *db, &identified_attendee, &sport).await {
+            match find_sport(sport_name, Some(id_attendee.gender)) {
+                Ok(sport) => {
+                    match validate_attendee(&mut *db, &id_attendee, &sport).await {
                         AttendeeStatus::Ok => {
-                            let context = context! {captain: identified_attendee};
+                            let context = context! {
+                                captain: TeamMember::from_indentified_attendee(&id_attendee, &mut *db).await,
+                                sport: sport,
+                                captain_ref: order_ref,
+                                school_id: id_attendee.school_id
+                            };
                             Some(Template::render("compose_team", &context))
                         },
                         _ => None
                     }
                 }
-                None => None
+                Err(_) => None
             }
         },
         None => None
     }
 }
 
-#[get("/test")]
-pub async fn get_test() -> Option<Template> {
+#[get("/test/<sport_name>")]
+pub async fn get_test(sport_name: &str) -> Option<Template> {
     let mut mock_data: Vec<TeamMember> = vec!();
     for i in 1..10 {
         mock_data.push(
             TeamMember { 
-                id: i, 
                 first_name: String::from(format!("first name {i}")), 
                 last_name: String::from(format!("last name {i}")), 
                 school: String::from("School"),
@@ -346,8 +357,43 @@ pub async fn get_test() -> Option<Template> {
             }
         );
     }
-    let context = context! {team: mock_data};
-    Some(Template::render("view_team", &context))
+    match find_sport(sport_name, Some(AttendeeGender::F)) {
+        Ok(s) => {
+            let context = context! {captain: &mock_data[0], sport:s};
+            Some(Template::render("compose_team", &context))
+        }
+        Err(e) => {
+            warn!("{}", e);
+            None
+        }
+    }
+}
+
+#[get("/success")]
+pub async fn get_team_success() -> Template {
+    Template::render("success", context!{})
+}
+
+#[get("/help")]
+pub async fn get_team_help() -> Template {
+    Template::render("help", context!{})
+}
+
+#[catch(500)]
+fn internal_error() -> Json<SimpleResponse> {
+    Json(SimpleResponse {
+        message: String::from("Whoops! Looks like we messed up."),
+        code: SimpleResponseCode::ServerError
+    })
+}
+
+
+#[catch(404)]
+fn not_found(req: &Request) -> Json<SimpleResponse> {
+    Json(SimpleResponse{
+        message: format!("I couldn't find '{}'. Try something else?", req.uri()),
+        code: SimpleResponseCode::UserError
+    })
 }
 
 #[launch]
@@ -369,6 +415,9 @@ fn rocket() -> rocket::Rocket<rocket::Build> {
         ])
         .mount("/team", routes![
             get_test,
-            get_compose
+            get_compose,
+            get_team_success,
+            get_team_help
         ])
+        .register("/api", catchers![not_found, internal_error])
 }
