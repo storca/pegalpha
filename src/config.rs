@@ -43,10 +43,16 @@ pub fn find_sport(sport: &str, gender:Option<AttendeeGender>) -> Result<Sport, S
             let sport_type = prop.get("gender");
             if sport_type.is_some() {
                 let max_teams_per_school:u8;
+                let mut school_mix_allowed:bool = false;
 
                 match prop.get("max_teams_per_school") {
                     Some(o) => max_teams_per_school = o.parse().unwrap(),
                     None => return Err(format!("Missing max_teams_per_school in [{section_name}]"))
+                }
+
+                match prop.get("school_mix_allowed") {
+                    Some(o) => school_mix_allowed = o.parse().unwrap(),
+                    None => ()
                 }
 
                 // Does the sport support mixed teams or strict teams ?
@@ -62,7 +68,8 @@ pub fn find_sport(sport: &str, gender:Option<AttendeeGender>) -> Result<Sport, S
                                 min_players: min_opt.unwrap().parse::<u8>().unwrap(),
                                 max_players: max_opt.unwrap().parse::<u8>().unwrap(),
                                 gender: SportGender::Mixed,
-                                max_teams_per_school: max_teams_per_school
+                                max_teams_per_school: max_teams_per_school,
+                                school_mix_allowed: school_mix_allowed
                             };
                             return Ok(s);
                         }
@@ -86,14 +93,16 @@ pub fn find_sport(sport: &str, gender:Option<AttendeeGender>) -> Result<Sport, S
                                                         min_players: min_m_opt.unwrap().parse::<u8>().unwrap(), 
                                                         max_players: max_m_opt.unwrap().parse::<u8>().unwrap(), 
                                                         gender: SportGender::M,
-                                                        max_teams_per_school: max_teams_per_school});
+                                                        max_teams_per_school: max_teams_per_school,
+                                                        school_mix_allowed: school_mix_allowed});
                                 },
                                 AttendeeGender::F => {
                                     return Ok(Sport { name: String::from(section_name), 
                                         min_players: min_f_opt.unwrap().parse::<u8>().unwrap(), 
                                         max_players: max_f_opt.unwrap().parse::<u8>().unwrap(), 
                                         gender: SportGender::F,
-                                        max_teams_per_school: max_teams_per_school });
+                                        max_teams_per_school: max_teams_per_school,
+                                        school_mix_allowed: school_mix_allowed });
                                 }
                             }   
                         }

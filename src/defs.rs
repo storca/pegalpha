@@ -34,7 +34,8 @@ pub struct Sport {
     /**
      * How much teams a school is allowed to have in this sport ?
      */
-    pub max_teams_per_school: u8
+    pub max_teams_per_school: u8,
+    pub school_mix_allowed: bool
 }
 
 #[derive(Serialize, Clone)]
