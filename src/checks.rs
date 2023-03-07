@@ -173,11 +173,10 @@ pub async fn has_team(db: &mut MySqlConnection, attendee:&IdentifiedAttendee, sp
  * 
  * This applies the max_teams_per_school policy
  */
-pub async fn can_school_register_team(db: &mut MySqlConnection, attendee:&IdentifiedAttendee, sport: &Sport) -> bool {
-    let row = sqlx::query("SELECT COUNT(*) FROM teams t
-    JOIN question_options qo ON qo.id = t.school_id
-    JOIN question_answers qa ON qa.question_id = qo.question_id
-    WHERE qa.attendee_id = ? AND t.sport = ?").bind(attendee.id).bind(&sport.name).fetch_one(&mut *db).await;
+pub async fn  can_school_register_team(db: &mut MySqlConnection, attendee:&IdentifiedAttendee, sport: &Sport) -> bool {
+    let row = sqlx::query(
+        "SELECT COUNT(*) FROM teams t WHERE t.school_id = ? AND t.sport = ?")
+        .bind(attendee.school_id).bind(&sport.name).fetch_one(&mut *db).await;
 
     match row {
         Ok(r) => {
@@ -255,10 +254,12 @@ pub async fn validate_team(db: &mut MySqlConnection, team:&Team, sport: Sport) -
         }
     }
     //Check matching school ids
-    let captain = attendee_list.first().unwrap();
-    for member in &attendee_list {
-        if captain.school_id != member.school_id {
-            return Err(format!("Members of a team should all come from the same school"));
+    if !sport.school_mix_allowed {
+        let captain = attendee_list.first().unwrap();
+        for member in &attendee_list {
+            if captain.school_id != member.school_id {
+                return Err(format!("Members of a team should all come from the same school"));
+            }
         }
     }
     Ok(attendee_list)
