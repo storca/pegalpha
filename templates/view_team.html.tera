@@ -1,22 +1,34 @@
-{% extends "team_base" %}
+{% extends "base" %}
 
 {% block above_table %}
 <h1>Your team</h1>
 {% endblock above_table %}
 
-{% block team_content %}
-    {% for member in team %}
-        <tr class="team-row">
-            <td>{{member.first_name}}</td>
-            <td>{{member.last_name}}</td>
-            <td>{{member.school}}</td>
-            <td>
-                <ul>
-                {% for sport in member.sports %}
-                    <li>{{sport}}</li>
-                {% endfor %}
-                </ul>
-            </td>
-        </tr>
-    {% endfor %}
-{% endblock team_content %}
+{% block body %}
+    <h1>{{name}}</h1>
+    <h2>{{sport}} - {{gender}}</h2>
+    <table class="team-table">
+        <tbody>
+            <tr>
+                <th>First name</th>
+                <th>Last name</th>
+                <th>School</th>
+                <th>Sports</th>
+            </tr>
+            {% for member in members %}
+            <tr class="team-row">
+                <td>{{member.first_name}}</td>
+                <td>{{member.last_name}}</td>
+                <td>{{member.school}}</td>
+                <td>
+                    <ul>
+                    {% for sport in member.sports %}
+                        <li>{{sport}}</li>
+                    {% endfor %}
+                    </ul>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock body %}

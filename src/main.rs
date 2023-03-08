@@ -21,7 +21,7 @@ pub mod config;
 pub mod defs;
 pub mod checks;
 
-use config::find_sport;
+use config::{find_sport, get_option};
 use rocket::serde::json::Json;
 use rocket::response::Redirect;
 use rocket::fs::NamedFile;
@@ -31,6 +31,8 @@ use rocket_dyn_templates::{Template, context};
 
 use defs::*;
 use checks::*;
+
+use rocket_db_pools::sqlx::Row;
 
 #[derive(Database, Clone)]
 #[database("attendize")]
@@ -51,20 +53,20 @@ pub async fn get_attendee_sports(mut db: Connection<Attendize>, order_ref: &str)
     let attendee_opt = retrieve_attendee(&mut db, order_ref).await;
 
     match attendee_opt {
-        Some(ida) => {
+        Ok(ida) => {
             return Some(Json(ida.sports));
         }
-        None => return None
+        Err(_) => return None
     }
 }
-
+/**
 #[get("/attendee/<order_ref>")]
 pub async fn get_attendee(mut db: Connection<Attendize>, order_ref:&str) -> Option<Json<IdentifiedAttendee>> {
     match retrieve_attendee(&mut db, order_ref).await {
-        Some(a) => Some(Json(a)),
-        None => None
+        Ok(a) => Some(Json(a)),
+        Err(_) => None
     }
-}
+} */
 
 #[get("/attendee/check/<team_sport>/<team_gender>/<order_ref>")]
 pub async fn get_check_attendee(mut db: Connection<Attendize>, team_sport: &str, team_gender: &str, order_ref: &str) -> Json<CheckAttendeeResponse> {
@@ -76,7 +78,7 @@ pub async fn get_check_attendee(mut db: Connection<Attendize>, team_sport: &str,
     let attendee = retrieve_attendee(&mut db, order_ref).await;
 
     match attendee {
-        Some(id_attendee) => {
+        Ok(id_attendee) => {
             let gender: AttendeeGender;
             match team_gender {
                 "M" => gender = AttendeeGender::M,
@@ -94,7 +96,7 @@ pub async fn get_check_attendee(mut db: Connection<Attendize>, team_sport: &str,
                 return Json(response);
             }
 
-            let m = TeamMember::from_indentified_attendee(&id_attendee, &mut *db).await;
+            let m = TeamMember::from_identified_attendee(&id_attendee, &mut *db).await;
             let fullname = format!("{} {}", m.first_name, m.last_name);
 
             match validate_attendee(&mut db, &id_attendee, &sport.unwrap()).await {
@@ -109,12 +111,12 @@ pub async fn get_check_attendee(mut db: Connection<Attendize>, team_sport: &str,
                 AttendeeStatus::InvalidGender =>
                     response.message = String::from(format!("{team_sport} does not allow mixed teams, every team member must be of gender {team_gender}")),
                 AttendeeStatus::Ok => {
-                    response.member = Some(TeamMember::from_indentified_attendee(&id_attendee, &mut *db).await);
+                    response.member = Some(TeamMember::from_identified_attendee(&id_attendee, &mut *db).await);
                     response.message = String::from("Ok");
                 }
             }
         }
-        None => {
+        Err(_) => {
             response.message = String::from("Attendee not found");
         }
     }
@@ -241,8 +243,8 @@ pub async fn get_can_register(mut db: Connection<Attendize>, sport_name: &str, o
 
     let captain: IdentifiedAttendee;
     match retrieve_attendee(&mut *db, order_ref).await {
-        Some(a) => captain = a,
-        None => {
+        Ok(a) => captain = a,
+        Err(_) => {
             response.message = String::from("Attendee not found");
             response.code = SimpleResponseCode::UserError;
             return Json(response);
@@ -303,11 +305,11 @@ pub async fn get_ressource(path: PathBuf) -> Option<NamedFile> {
 #[get("/welcome/<order_ref>")]
 pub async fn get_welcome(mut db: Connection<Attendize>, order_ref: &str) -> Option<Template> {
     match retrieve_attendee(&mut *db, order_ref).await {
-        Some(attendee) => {
+        Ok(attendee) => {
             let context = context! {sports: attendee.sports, order_ref: order_ref};
             Some(Template::render("welcome", &context))
         }
-        None => None
+        Err(_) => None
     }
 }
 
@@ -321,13 +323,13 @@ pub async fn get_welcome(mut db: Connection<Attendize>, order_ref: &str) -> Opti
 #[get("/compose/<order_ref>/<sport_name>")]
 pub async fn get_compose(mut db: Connection<Attendize>, order_ref: &str, sport_name: &str) -> Option<Template> {
     match retrieve_attendee(&mut *db, order_ref).await {
-        Some(id_attendee) => {
+        Ok(id_attendee) => {
             match find_sport(sport_name, Some(id_attendee.gender)) {
                 Ok(sport) => {
                     match validate_attendee(&mut *db, &id_attendee, &sport).await {
                         AttendeeStatus::Ok => {
                             let context = context! {
-                                captain: TeamMember::from_indentified_attendee(&id_attendee, &mut *db).await,
+                                captain: TeamMember::from_identified_attendee(&id_attendee, &mut *db).await,
                                 sport: sport,
                                 captain_ref: order_ref,
                                 school_id: id_attendee.school_id
@@ -340,7 +342,7 @@ pub async fn get_compose(mut db: Connection<Attendize>, order_ref: &str, sport_n
                 Err(_) => None
             }
         },
-        None => None
+        Err(_) => None
     }
 }
 
@@ -396,13 +398,126 @@ fn not_found(req: &Request) -> Json<SimpleResponse> {
     })
 }
 
+/**
+ * ----- TEAM PREVIEW ----------
+ */
+#[get("/teams/<secret>?<school>&<sport>")]
+pub async fn get_list_teams(mut db: Connection<Attendize>, secret:&str, school:Option<u32>, sport:Option<String>) -> Option<Template> {
+    let cfg_secret = get_option("secret");
+    if cfg_secret.as_str() != secret {
+        return None;
+    }
+    let res:Result<Vec<rocket_db_pools::sqlx::mysql::MySqlRow>, rocket_db_pools::sqlx::Error>;
+    if school.is_some() && sport.is_some() {
+        res = sqlx::query(
+            "SELECT qo.name school, t.name, t.sport, t.gender, t.uuid
+            FROM teams t JOIN question_options qo ON t.school_id = qo.id 
+            WHERE school_id = ? AND sport = ?
+            ORDER BY school"
+        )
+        .bind(school.unwrap())
+        .bind(sport.unwrap())
+        .fetch_all(&mut *db)
+        .await;
+    }
+    else if school.is_some() {
+        res = sqlx::query(
+            "SELECT qo.name school, t.name, t.sport, t.gender, t.uuid
+            FROM teams t JOIN question_options qo ON t.school_id = qo.id 
+            WHERE school_id = ?
+            ORDER BY school"
+        )
+        .bind(school.unwrap())
+        .fetch_all(&mut *db)
+        .await;
+    }
+    else if sport.is_some() {
+        res = sqlx::query(
+            "SELECT qo.name school, t.name, t.sport, t.gender, t.uuid
+            FROM teams t JOIN question_options qo ON t.school_id = qo.id 
+            WHERE sport = ?
+            ORDER BY school"
+        )
+        .bind(sport.unwrap())
+        .fetch_all(&mut *db)
+        .await;
+    }
+    else {
+        res = sqlx::query(
+            "SELECT qo.name school, t.name, t.sport, t.gender, t.uuid
+            FROM teams t JOIN question_options qo ON t.school_id = qo.id 
+            ORDER BY school"
+        )
+        .fetch_all(&mut *db)
+        .await;
+    }
+    let sports_fut = sqlx::query(
+        "SELECT name FROM question_options WHERE question_id IN (5,6,8)"
+    ).fetch_all(&mut *db);
+    match res {
+        Ok(rows) => {
+            let mut teams:Vec<TeamView> = vec![];
+            for row in rows {
+                teams.push(TeamView { 
+                    name: row.get(1), 
+                    school: row.get(0), 
+                    sport: row.get(2), 
+                    gender: row.get(3), 
+                    uuid: row.get(4) });
+            }
+            let mut sports:Vec<String> = vec![];
+            for row in sports_fut.await.ok()? {
+                sports.push(row.get(0));
+            }
+            let ctx = context!{teams: teams, sports: sports};
+            return Some(Template::render("team_list", &ctx));
+        },
+        Err(_) => {
+            return None;
+        }
+    }
+}
+
+#[get("/team/<uuid>")]
+pub async fn get_team(mut db: Connection<Attendize>, uuid:&str) -> Option<Template> {
+    let row = sqlx::query(
+        "SELECT id, name, sport, gender FROM teams WHERE uuid=?"
+    )
+    .bind(uuid)
+    .fetch_one(&mut *db).await.ok()?;
+
+    let team_id:u32 = row.get(0);
+    let name:String = row.get(1);
+    let sport:String = row.get(2);
+    let gender:String = row.get(3);
+
+    let rows = sqlx::query(
+        "SELECT attendee_id FROM team_members WHERE team_id=?"
+    )
+    .bind(team_id)
+    .fetch_all(&mut *db).await.ok()?;
+
+    let mut members:Vec<TeamMember> = vec![];
+
+    for row in rows {
+        match get_attendee(&mut *db, row.get(0)).await {
+            // Only add valid attendees
+            Ok(ida) => {
+                let member = TeamMember::from_identified_attendee(&ida, &mut *db).await;
+                members.push(member);
+            },
+            Err(_) => ()
+        }
+    }
+    Some(Template::render("view_team", context!{members: members, name, sport, gender}))
+}
+
 #[launch]
 fn rocket() -> rocket::Rocket<rocket::Build> {
     rocket::build()
         .attach(Attendize::init())
         .attach(Template::fairing())
-        .mount("/api/", routes![
-            get_attendee, 
+        .mount("/api/", routes![ 
             get_check_attendee, 
             get_attendee_sports, 
             post_create_team, 
@@ -418,6 +533,10 @@ fn rocket() -> rocket::Rocket<rocket::Build> {
             get_compose,
             get_team_success,
             get_team_help
+        ])
+        .mount("/view", routes![
+            get_list_teams,
+            get_team
         ])
         .register("/api", catchers![not_found, internal_error])
 }

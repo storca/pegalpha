@@ -65,7 +65,7 @@ pub struct TeamMember {
 }
 
 impl TeamMember {
-    pub async fn from_indentified_attendee(attendee: &IdentifiedAttendee, db: &mut MySqlConnection) -> TeamMember {
+    pub async fn from_identified_attendee(attendee: &IdentifiedAttendee, db: &mut MySqlConnection) -> TeamMember {
         let attendee_name = sqlx::query("SELECT first_name, last_name FROM attendees WHERE id = ?")
         .bind(attendee.id).fetch_one(&mut *db).await;
         match attendee_name {
@@ -99,6 +99,15 @@ pub struct Team {
     pub sport: String,
     pub refs: Vec<String>,
     pub gender: SportGender
+}
+#[derive(Serialize)]
+#[serde(crate = "rocket::serde")]
+pub struct TeamView {
+    pub name: String,
+    pub school: String,
+    pub sport: String,
+    pub gender: String,
+    pub uuid: String
 }
 
 #[derive(PartialEq, Debug)]
