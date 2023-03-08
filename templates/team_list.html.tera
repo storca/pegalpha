@@ -30,14 +30,15 @@
 {% endblock %}
 
 {% block body %}
-<form id="filter-form">
-    <select id="sport-select">
+<img class="eag-logo" src="/static/eag-logo-white.png">
+<form id="filter-form" class="filter-form">
+    <select id="sport-select" class="filter-select">
         <option value="none">--- select ---</option>
         {% for sport in sports %}
         <option id="{{sport}}">{{sport}}</option>
         {% endfor %}
     </select>
-    <select id="school-select">
+    <select id="school-select" class="filter-select">
         <option value="none">--- select ---</option>
         <option value="323">ENAC</option>
         <option value="324">ENSMA</option>
@@ -52,7 +53,7 @@
         <option value="339">Sup</option>
         <option value="340">ENSPIMA</option>
     </select>
-    <input type="submit">
+    <input type="submit" value="Filter">
 </form>
 <table class="team-table">
     <tbody>

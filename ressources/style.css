@@ -196,3 +196,13 @@ input[type="text"] {
 input[type="text"]::placeholder {
     color: var(--disabled-color);
 }
+
+.filter-form {
+    display: flex;
+    margin-top: 10px;
+}
+
+.filter-select {
+    margin-top: 1px;
+    margin-right: 5px;
+}
