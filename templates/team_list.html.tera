@@ -1,0 +1,79 @@
+{% extends "base" %}
+
+{% block script %}
+<script type="text/javascript">
+    function handleFilter(event) {
+        let sport = document.getElementById('sport-select').value;
+        let school = document.getElementById('school-select').value;
+        let url = new URL(window.location.href);
+        if(sport != 'none' && school != 'none') {
+            url.searchParams.set('school', school);
+            url.searchParams.set('sport', sport);
+        }
+        else if(sport != 'none') {
+            url.searchParams.set('sport', sport);
+        }
+        else if(school != 'none') {
+            url.searchParams.set('school', school);
+        }
+        else {
+            url.searchParams.delete('sport');
+            url.searchParams.delete('school');
+        }
+        window.location.href = url.href;
+        event.preventDefault();
+    }
+    window.onload = function() {
+        document.getElementById('filter-form').addEventListener('submit', handleFilter);
+    }
+</script>
+{% endblock %}
+
+{% block body %}
+<form id="filter-form">
+    <select id="sport-select">
+        <option value="none">--- select ---</option>
+        {% for sport in sports %}
+        <option id="{{sport}}">{{sport}}</option>
+        {% endfor %}
+    </select>
+    <select id="school-select">
+        <option value="none">--- select ---</option>
+        <option value="323">ENAC</option>
+        <option value="324">ENSMA</option>
+        <option value="325">ELISA</option>
+        <option value="326">Supmeca</option>
+        <option value="327">ESTACA</option>
+        <option value="328">IPSA</option>
+        <option value="329">Madrid</option>
+        <option value="333">Cranfield</option>
+        <option value="335">Rome</option>
+        <option value="338">Berlin</option>
+        <option value="339">Sup</option>
+        <option value="340">ENSPIMA</option>
+    </select>
+    <input type="submit">
+</form>
+<table class="team-table">
+    <tbody>
+        <tr>
+            <th>School</th>
+            <th>Team name</th>
+            <th>Team sport</th>
+            <th>Team gender</th>
+            <th></th>
+        </tr>
+        {% for team in teams %}
+        <tr>
+            <td>{{team.school}}</td>
+            <td>{{team.name}}</td>
+            <td>{{team.sport}}</td>
+            <td>{{team.gender}}</td>
+            <td>
+                <a href="/view/team/{{team.uuid}}" target="_blank">View team</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock body %}

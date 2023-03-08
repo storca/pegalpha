@@ -11,16 +11,16 @@ use crate::config;
  * order_ref : &str
  *  example : 'hGsddrf-1'
  */
-pub async fn retrieve_attendee(db: &mut MySqlConnection, order_ref:&str) -> Option<IdentifiedAttendee> {
+pub async fn retrieve_attendee(db: &mut MySqlConnection, order_ref:&str) -> Result<IdentifiedAttendee, String> {
     if order_ref.len() > 10
     {
-        return None;
+        return Err(format!("Order reference invalid"));
     }
     else {
         let iter = order_ref.split('-');
         let split_ref = iter.collect::<Vec<&str>>();
         if split_ref.len() != 2 {
-            return None;
+            return Err(format!("Order reference invalid"));
         }
         // println!("order_ref : {}, index : {}", split_ref[0], split_ref[1]);
         // Retrieve attendee_id, ticket id and gender (one row only)
@@ -43,83 +43,110 @@ pub async fn retrieve_attendee(db: &mut MySqlConnection, order_ref:&str) -> Opti
             Ok(ro) => {
                 match ro {
                     Some(r) => first_row = r,
-                    None => return None
+                    None => return Err(format!("Attendee not found"))
                 }
             }
-            Err(e) => panic!("Error while retrieving attendee : {e}")
+            Err(e) => return Err(format!("Error while retrieving attendee : {e}"))
         }
 
         let attendee_id:u32 = first_row.get(0);
         let ticket_id:u32 = first_row.get(1);
         
         let gender_name:String = first_row.get(2);
-        let gender:AttendeeGender;
 
-        match gender_name.as_str() {
-            "Male" => gender = AttendeeGender::M,
-            "Female" => gender = AttendeeGender::F,
-            _other => panic!("Gender name unknown \'{}\'", _other)
-        }
-
-        // Get attendee sports
-        // Ensure the correct sports are made available
-        let sport_question_ids:String;
-
-        match gender {
-            AttendeeGender::M => sport_question_ids = config::get_option("male_sport_question_ids"),
-            AttendeeGender::F => sport_question_ids = config::get_option("female_sport_question_ids")
-        }
-
-        let sports_stmt = format!(
-            "SELECT answer_text FROM question_answers
-            WHERE attendee_id = ?
-            AND question_id IN {}", sport_question_ids);
-
-        let sports_fut = sqlx::query(&sports_stmt).bind(attendee_id)
-        .fetch_all(&mut *db);
-
-        let sports_res = sports_fut.await;
-        if sports_res.is_err() {
-            panic!("SQL error while retrieving attendee sports");
-        }
-
-        let mut sports:Vec<Sport> = Vec::new();
-
-        for row in sports_res.unwrap() {
-            let sport_name:String = row.get(0);
-            
-            let sport = config::find_sport(sport_name.as_str(), Some(gender));
-            if sport.is_ok() { //Ignore sports that are not in the config file (individual sports)
-                sports.push(sport.unwrap());
-            }
-        }
-
-        let school_stmt: String = format!(
-            "SELECT qo.id FROM question_options qo
-            JOIN question_answers qa ON qa.question_id = qo.question_id
-            WHERE qa.question_id = {} AND qa.attendee_id = ? AND qo.name = qa.answer_text",
-            config::get_option("school_question_id")
-        );
-
-        let school_fut = sqlx::query(&school_stmt).bind(attendee_id)
-        .fetch_one(&mut *db);
-
-        let school_res = school_fut.await;
-        let school_id: u32;
-        if school_res.is_err() {
-            panic!("SQL error while retrieving attendee school");
-        }
-        else {
-            school_id = school_res.unwrap().get(0);
-        }
-
-        return Some(IdentifiedAttendee { 
-            id: attendee_id, 
-            ticket_id: ticket_id, 
-            gender: gender, 
-            sports: sports,
-            school_id: school_id});
+        complete_attendee(&mut *db, attendee_id, ticket_id, gender_name).await
     }
+}
+pub async fn get_attendee(db:&mut MySqlConnection, attendee_id:u32) -> Result<IdentifiedAttendee, String> {
+    let attendee_stmt = format!("SELECT a.ticket_id, qa.answer_text
+        FROM attendees a, question_answers qa
+        WHERE qa.attendee_id = a.id
+        AND qa.question_id = {}
+        AND a.is_cancelled = 0
+        AND a.id = ?", config::get_option("gender_question_id"));
+    let res = sqlx::query(&attendee_stmt).bind(attendee_id).fetch_optional(&mut *db).await;
+    if res.is_err() {
+        return Err(format!("SQL error while getting attendee"));
+    }
+    match res.unwrap() {
+        Some(r) => {
+            let ticket_id:u32;
+            let gender_name:String;
+            ticket_id = r.get(0);
+            gender_name = r.get(1);
+            return complete_attendee(&mut *db, attendee_id, ticket_id, gender_name).await;
+        }
+        None => {
+            return Err(format!("Attendee not found"));
+        }
+    }
+}
+pub async fn complete_attendee(db:&mut MySqlConnection, attendee_id:u32, ticket_id:u32, gender_name:String) -> Result<IdentifiedAttendee, String> {
+    let gender:AttendeeGender;
+
+    match gender_name.as_str() {
+        "Male" => gender = AttendeeGender::M,
+        "Female" => gender = AttendeeGender::F,
+        other => return Err(format!("Gender name unknown \'{other}\'"))
+    }
+    // Get attendee sports
+    // Ensure the correct sports are made available
+    let sport_question_ids:String;
+
+    match gender {
+        AttendeeGender::M => sport_question_ids = config::get_option("male_sport_question_ids"),
+        AttendeeGender::F => sport_question_ids = config::get_option("female_sport_question_ids")
+    }
+
+    let sports_stmt = format!(
+        "SELECT answer_text FROM question_answers
+        WHERE attendee_id = ?
+        AND question_id IN {}", sport_question_ids);
+
+    let sports_fut = sqlx::query(&sports_stmt).bind(attendee_id)
+    .fetch_all(&mut *db);
+
+    let sports_res = sports_fut.await;
+    if sports_res.is_err() {
+        return Err(format!("SQL error while retrieving attendee sports"));
+    }
+
+    let mut sports:Vec<Sport> = Vec::new();
+
+    for row in sports_res.unwrap() {
+        let sport_name:String = row.get(0);
+        
+        let sport = config::find_sport(sport_name.as_str(), Some(gender));
+        if sport.is_ok() { //Ignore sports that are not in the config file (individual sports)
+            sports.push(sport.unwrap());
+        }
+    }
+
+    let school_stmt: String = format!(
+        "SELECT qo.id FROM question_options qo
+        JOIN question_answers qa ON qa.question_id = qo.question_id
+        WHERE qa.question_id = {} AND qa.attendee_id = ? AND qo.name = qa.answer_text",
+        config::get_option("school_question_id")
+    );
+
+    let school_fut = sqlx::query(&school_stmt).bind(attendee_id)
+    .fetch_one(&mut *db);
+
+    let school_res = school_fut.await;
+    let school_id: u32;
+    if school_res.is_err() {
+        return Err(format!("SQL error while retrieving attendee school"));
+    }
+    else {
+        school_id = school_res.unwrap().get(0);
+    }
+
+    return Ok(IdentifiedAttendee { 
+        id: attendee_id, 
+        ticket_id: ticket_id, 
+        gender: gender, 
+        sports: sports,
+        school_id: school_id});
 }
 
 /**
@@ -238,14 +265,14 @@ pub async fn validate_team(db: &mut MySqlConnection, team:&Team, sport: Sport) -
     let mut attendee_list:Vec<IdentifiedAttendee> = Vec::new();
     for reference in &team.refs {
         let attendee = retrieve_attendee(&mut *db, reference.as_str()).await;
-        if attendee.is_none() {
+        if attendee.is_err() {
             return Err(format!("Order reference \'{reference}\' is invalid"));
         }
         else {
             let id_attendee = attendee.unwrap();
             let status = validate_attendee(&mut *db, &id_attendee, &sport).await;
             if  status != AttendeeStatus::Ok {
-                let m = TeamMember::from_indentified_attendee(&id_attendee, &mut *db).await;
+                let m = TeamMember::from_identified_attendee(&id_attendee, &mut *db).await;
                 return Err(format!("{} {} ({reference}) causes a validation error, code:{:?}", m.first_name, m.last_name, status));
             }
             else {
