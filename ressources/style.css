@@ -26,6 +26,13 @@ body {
     color: var(--text-color);
 }
 
+a {
+	color: var(--text-color);
+}
+
+a:hover {
+	color: var(--disabled-color);
+}
 p {
     font-family: 'Noto Sans', sans-serif;
     color: var(--text-color);
