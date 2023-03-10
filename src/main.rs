@@ -352,6 +352,7 @@ pub async fn get_test(sport_name: &str) -> Option<Template> {
     for i in 1..10 {
         mock_data.push(
             TeamMember { 
+                attendee_id: 1,
                 first_name: String::from(format!("first name {i}")), 
                 last_name: String::from(format!("last name {i}")), 
                 school: String::from("School"),
@@ -497,14 +498,15 @@ pub async fn get_team(mut db: Connection<Attendize>, uuid:&str) -> Option<Templa
     .bind(team_id)
     .fetch_all(&mut *db).await.ok()?;
 
-    let mut members:Vec<TeamMember> = vec![];
+    let mut members:Vec<CompleteTeamMember> = vec![];
 
     for row in rows {
         match get_attendee(&mut *db, row.get(0)).await {
             // Only add valid attendees
             Ok(ida) => {
                 let member = TeamMember::from_identified_attendee(&ida, &mut *db).await;
-                members.push(member);
+                let full_member = CompleteTeamMember::from_team_member(&mut *db, &member).await;
+                members.push(full_member);
             },
             Err(_) => ()
         }
