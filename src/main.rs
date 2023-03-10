@@ -453,7 +453,7 @@ pub async fn get_list_teams(mut db: Connection<Attendize>, secret:&str, school:O
         .await;
     }
     let sports_fut = sqlx::query(
-        "SELECT name FROM question_options WHERE question_id IN (5,6,8)"
+        "SELECT name FROM question_options WHERE question_id IN (5,6,8) ORDER BY name"
     ).fetch_all(&mut *db);
     match res {
         Ok(rows) => {

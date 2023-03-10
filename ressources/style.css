@@ -3,6 +3,7 @@
 
 :root {
     --bg-color: #000E3D;
+    --bg-light-color: #35457B;
     --text-color: #FEFDFF;
     --success-color: #62A87C;
     --error-color: #FF007F;
@@ -24,6 +25,14 @@ h2 {
 body {
     background-color: var(--bg-color);
     color: var(--text-color);
+}
+
+a {
+	color: var(--text-color);
+}
+
+a:hover {
+	color: var(--disabled-color);
 }
 
 p {
@@ -143,6 +152,10 @@ ul {
 table {
     width: 60%;
     text-align: center;
+}
+
+tr:nth-child(even) {
+	background-color: var(--bg-light-color);
 }
 
 .team-table {
