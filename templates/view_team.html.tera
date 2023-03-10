@@ -12,6 +12,7 @@
             <tr>
                 <th>First name</th>
                 <th>Last name</th>
+                <th>Email</th>
                 <th>School</th>
                 <th>Sports</th>
             </tr>
@@ -19,6 +20,7 @@
             <tr class="team-row">
                 <td>{{member.first_name}}</td>
                 <td>{{member.last_name}}</td>
+                <td><a href="mailto:{{member.email}}">{{member.email}}</a></td>
                 <td>{{member.school}}</td>
                 <td>
                     <ul>
