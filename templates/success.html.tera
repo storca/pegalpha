@@ -32,7 +32,7 @@
 <div class="container">
     <img class="eag-logo" src="/static/eag-logo-white.png">
     <h1>Sucess!</h1>
-    <h2>You're all set, your team was registered!</h2>
+    <h2>{{message}}</h2>
     <img class="checkmark" src="/static/checkmark.png">
 </div>
 {% endblock body %}

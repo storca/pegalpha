@@ -1,0 +1,26 @@
+{% extends "base" %}
+
+{% block script %}
+<script type="text/javascript">
+    function handleRegister(event) {
+        let url = new URL(window.location.href);
+        url.searchParams.set('choice', true);
+        window.location.href = url.href;
+        event.preventDefault();
+    }
+    window.onload = function () {
+        document.getElementById('shotgun').addEventListener('submit', handleRegister);
+    }
+</script>
+{% endblock script %}
+
+{% block body %}
+<h1>Cross Country Shotgun</h1>
+<p>If you did not register in cross-country, it is possible to do so by clicking the button below</p>
+<div id="error-message" class="alert">
+    <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
+</div>
+<form id="shotgun">
+    <input type="submit" value="Register">
+</form>
+{% endblock body %}

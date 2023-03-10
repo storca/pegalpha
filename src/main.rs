@@ -374,7 +374,7 @@ pub async fn get_test(sport_name: &str) -> Option<Template> {
 
 #[get("/success")]
 pub async fn get_team_success() -> Template {
-    Template::render("success", context!{})
+    Template::render("success", context!{message:"You're all set, your team was registered!"})
 }
 
 #[get("/help")]
@@ -514,6 +514,54 @@ pub async fn get_team(mut db: Connection<Attendize>, uuid:&str) -> Option<Templa
     Some(Template::render("view_team", context!{members: members, name, sport, gender}))
 }
 
+#[get("/shotgun/<order_ref>?<choice>")]
+pub async fn get_shotgun(mut db: Connection<Attendize>, order_ref: &str, choice: Option<bool>) -> Option<Template> {
+    let id_attendee = retrieve_attendee(&mut *db, order_ref).await.ok()?;
+
+    let row = sqlx::query(
+        "SELECT COUNT(*) FROM question_answers WHERE attendee_id = ? AND question_id = 8 AND answer_text = ?"
+    )
+    .bind(id_attendee.id)
+    .bind("Cross Country")
+    .fetch_one(&mut *db).await.ok()?;
+
+    let count:i64 = row.get(0);
+    if count > 0 {
+        return None;
+    }
+
+    match choice {
+        Some(v) => {
+            if v {
+                let res = sqlx::query(
+                    "INSERT INTO question_answers(attendee_id, event_id, question_id, account_id, answer_text)
+                    VALUES (?, 2, 8, 1, ?)"
+                )
+                .bind(id_attendee.id)
+                .bind("Cross Country")
+                .execute(&mut *db).await;
+                
+                if res.is_err() {
+                    panic!("MYSQL insert error during shotgun");
+                }
+
+                Some(
+                    Template::render("success", context!{message: "Your registration to Cross Country has been taken into account"})
+                )
+            }
+            else {
+                None
+            }
+        }
+        None => {
+            Some(
+                Template::render("shotgun", context!{})
+            )
+        }
+    }
+}
+
+
 #[launch]
 fn rocket() -> rocket::Rocket<rocket::Build> {
     rocket::build()
@@ -528,7 +576,8 @@ fn rocket() -> rocket::Rocket<rocket::Build> {
         .mount("/", routes![
             get_index, 
             get_ressource, 
-            get_welcome
+            get_welcome,
+            get_shotgun
         ])
         .mount("/team", routes![
             get_test,
