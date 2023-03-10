@@ -17,6 +17,7 @@
 {% block body %}
 <h1>Cross Country Shotgun</h1>
 <p>If you did not register in cross-country, it is possible to do so by clicking the button below</p>
+<p>You can register <b>even if you already chose another annex sport!</b></p>
 <div id="error-message" class="alert">
     <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
 </div>

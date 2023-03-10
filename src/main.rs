@@ -516,6 +516,21 @@ pub async fn get_team(mut db: Connection<Attendize>, uuid:&str) -> Option<Templa
 
 #[get("/shotgun/<order_ref>?<choice>")]
 pub async fn get_shotgun(mut db: Connection<Attendize>, order_ref: &str, choice: Option<bool>) -> Option<Template> {
+    // Check if the number of Cross Country participants is < 300
+    let nb:i64 = sqlx::query(
+        "SELECT COUNT(*) FROM question_answers qa
+        JOIN attendees a ON qa.attendee_id = a.id
+        WHERE a.event_id = 2 AND qa.question_id = 8 AND qa.answer_text = ?"
+    )
+    .bind("Cross Country")
+    .fetch_one(&mut *db).await.ok()?.get(0);
+
+    if nb > 300 {
+        return Some(
+            Template::render("error", context!{message:"We have reached the maximum nummber of participants for Cross Country"})
+        );
+    }
+
     let id_attendee = retrieve_attendee(&mut *db, order_ref).await.ok()?;
 
     let row = sqlx::query(

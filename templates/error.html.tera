@@ -1,0 +1,7 @@
+{% extends "base" %}
+
+{% block body %}
+<img class="eag-logo" src="/static/eag-logo-white.png">
+<h1>Sorry! :(</h1>
+<h2>{{message}}</h2>
+{% endblock body %}
