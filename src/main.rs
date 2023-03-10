@@ -533,6 +533,18 @@ pub async fn get_shotgun(mut db: Connection<Attendize>, order_ref: &str, choice:
 
     let id_attendee = retrieve_attendee(&mut *db, order_ref).await.ok()?;
 
+    let athlete_tickets = config::get_option("athlete_ticket_ids");
+    let mut is_an_athlete = false;
+    for ticket_id in athlete_tickets.split(',') {
+        let id = ticket_id.parse::<u32>().unwrap();
+        if id == id_attendee.ticket_id {
+            is_an_athlete = true;
+        }
+    }
+    if !is_an_athlete {
+        return None;
+    }
+
     let row = sqlx::query(
         "SELECT COUNT(*) FROM question_answers WHERE attendee_id = ? AND question_id = 8 AND answer_text = ?"
     )
