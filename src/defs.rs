@@ -58,6 +58,7 @@ pub struct IdentifiedAttendee {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct TeamMember {
+    pub attendee_id: u32,
     pub first_name: String,
     pub last_name: String,
     pub school: String,
@@ -79,6 +80,7 @@ impl TeamMember {
                 }
 
                 let tm:TeamMember = TeamMember { 
+                    attendee_id: attendee.id,
                     first_name: String::from(row.get::<&str, usize>(0)), 
                     last_name: String::from(row.get::<&str, usize>(1)),
                     school: school_name_fut.await.unwrap().get::<String, usize>(0),
@@ -90,6 +92,52 @@ impl TeamMember {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(crate = "rocket::serde")]
+pub struct CompleteTeamMember {
+    pub attendee_id: u32,
+    pub first_name: String,
+    pub last_name: String,
+    pub school: String,
+    pub sports: Vec<String>,
+    pub email: String,
+    pub phone: String
+}
+
+impl CompleteTeamMember {
+    pub async fn from_team_member(db: &mut MySqlConnection, member: &TeamMember) -> CompleteTeamMember {
+        let result = sqlx::query(
+            "SELECT a.email, qa.answer_text FROM attendees a
+            JOIN question_answers qa ON qa.attendee_id = a.id
+            WHERE qa.question_id = 4 AND a.id = ?"
+        )
+        .bind(member.attendee_id)
+        .fetch_one(&mut *db).await;
+        let email:String;
+        let phone:String;
+        match result {
+            Ok(r) => {
+                email = r.get(0);
+                phone = r.get(1);
+            }
+            Err(_) => {
+                email = format!("none");
+                phone = format!("none");
+            }
+        }
+        CompleteTeamMember {
+            attendee_id: member.attendee_id,
+            first_name: member.first_name.clone(),
+            last_name: member.last_name.clone(),
+            school: member.school.clone(),
+            sports: member.sports.clone(),
+            email: email,
+            phone: phone
+        }
+    }
+}
+
 
 #[derive(Deserialize)]
 #[serde(crate = "rocket::serde")]
