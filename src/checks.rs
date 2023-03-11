@@ -12,7 +12,7 @@ use crate::config;
  *  example : 'hGsddrf-1'
  */
 pub async fn retrieve_attendee(db: &mut MySqlConnection, order_ref:&str) -> Result<IdentifiedAttendee, String> {
-    if order_ref.len() > 10
+    if order_ref.len() > 12
     {
         return Err(format!("Order reference invalid"));
     }
