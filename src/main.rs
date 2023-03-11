@@ -525,7 +525,7 @@ pub async fn get_shotgun(mut db: Connection<Attendize>, order_ref: &str, choice:
     .bind("Cross Country")
     .fetch_one(&mut *db).await.ok()?.get(0);
 
-    if nb > 300 {
+    if nb > 150 {
         return Some(
             Template::render("error", context!{message:"We have reached the maximum nummber of participants for Cross Country"})
         );
