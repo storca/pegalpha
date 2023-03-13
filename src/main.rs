@@ -535,7 +535,7 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
     }
     let mut members:Vec<CompleteTeamMember> = vec![];
     let members_qry = sqlx::query(
-        "SELECT a.id, a.first_name, a.last_name, a.email, qb.answer_text school, qc.answer_text phone, qd.answer_text gender
+        "SELECT a.id, a.first_name, a.last_name, a.email, qb.answer_text school, qc.answer_text phone, qd.answer_text gender,
         CONCAT(o.order_reference, '-', a.reference_index) attendee_ref
         FROM attendees a
         JOIN question_answers qa ON qa.attendee_id = a.id
