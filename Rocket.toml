@@ -1,2 +1,2 @@
 [default.databases.attendize]
-url = "mysql://teams:5s2TGSF5qUslaQ6giUj@localhost/attendize_prod"
+url = "mysql://rust:t1Ay9LYZavMHyOPTRFM@localhost/attendize_prod"
