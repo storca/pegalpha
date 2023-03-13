@@ -1,6 +1,7 @@
 {% extends "base" %}
 
 {% block body %}
+<h1>Members that are registered in no teams</h1>
 <table class="team-table">
     <tbody>
         <tr>
