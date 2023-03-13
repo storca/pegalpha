@@ -16,6 +16,7 @@
                 <th>School</th>
                 <th>Attendee reference</th>
                 <th>Sports</th>
+                <th></th>
             </tr>
             {% for member in members %}
             <tr class="team-row">
@@ -31,6 +32,7 @@
                     {% endfor %}
                     </ul>
                 </td>
+                <td><a href="/welcome/{{member.attendee_ref}}" target="_blank">New team</a></td>
             </tr>
             {% endfor %}
         </tbody>
