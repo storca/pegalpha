@@ -91,9 +91,12 @@ pub async fn get_check_attendee(mut db: Connection<Attendize>, team_sport: &str,
             }
 
             let sport = find_sport(team_sport, Some(gender));
-            if sport.is_err() {
-                response.message = String::from("Participant has an invalid sport name or sport is unavailable");
-                return Json(response);
+            match sport {
+                Ok(_) => (),
+                Err(e) => {
+                    response.message = format!("Error while reading sport: {e:?}");
+                    return Json(response);
+                }
             }
 
             let m = TeamMember::from_identified_attendee(&id_attendee, &mut *db).await;
