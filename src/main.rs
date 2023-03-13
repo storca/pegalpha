@@ -555,7 +555,7 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
             last_name: r.get(2),
             school: r.get(4),
             sports: vec![],
-            email: r.get(4),
+            email: r.get(3),
             phone: r.get(5)
         };
         let sports = sqlx::query(
