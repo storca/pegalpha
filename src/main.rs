@@ -539,10 +539,15 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
         WHERE a.event_id = 2 AND a.is_cancelled = 0
         AND qa.question_id IN (5, 6, 7, 8) AND qa.answer_text = ?
         AND qb.question_id = 15
-        AND a.id NOT IN (SELECT attendee_id FROM team_members)
+        AND a.id NOT IN (
+        	SELECT tm.attendee_id FROM team_members tm
+            JOIN teams t ON tm.team_id = t.id
+            AND t.sport = ?
+        )
         AND qc.question_id = 4
-        ORDER BY school"
+        ORDER BY school;"
     )
+    .bind(sport)
     .bind(sport)
     .fetch_all(&mut *db)
     .await
@@ -572,7 +577,7 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
         members.push(member);
     }
     Some(
-        Template::render("view_team", context!{members: members, name: "No team", sport: sport, gender: ""})
+        Template::render("view_team", context!{members: members, name: "No team", sport: sport, gender: format!("People that choosed {sport} and did not register in a {sport} team")})
     )
 }
 
