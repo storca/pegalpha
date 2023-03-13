@@ -542,7 +542,7 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
         AND a.id NOT IN (
         	SELECT tm.attendee_id FROM team_members tm
             JOIN teams t ON tm.team_id = t.id
-            AND t.sport = ?
+            WHERE t.sport = ?
         )
         AND qc.question_id = 4
         ORDER BY school;"
