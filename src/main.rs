@@ -564,7 +564,7 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
             phone: r.get(5)
         };
         let sports = sqlx::query(
-            "SELECT answer_text FROM question_answers WHERE attendee_id = ? AND question_id IN (5, 6, 7, 8)"
+            "SELECT DISTINCT(answer_text) FROM question_answers WHERE attendee_id = ? AND question_id IN (5, 6, 7, 8)"
         )
         .bind(member.attendee_id)
         .fetch_all(&mut *db)
