@@ -136,6 +136,14 @@ pub async fn post_create_team(mut db: Connection<Attendize>, team: Json<Team>) -
         message: String::from("Unhandled case"),
         code: SimpleResponseCode::ServerError
     };
+    match team_registration_open() {
+        Ok(_) => (),
+        Err(_) => {
+            response.message = format!("It is not possible to register a team right now");
+            response.code = SimpleResponseCode::UserError;
+            return Json(response);
+        }
+    }
     // Check number of team members
     match team.gender {
         SportGender::M => attendee_gender = Some(AttendeeGender::M),
@@ -292,6 +300,14 @@ pub async fn get_can_register(mut db: Connection<Attendize>, sport_name: &str, o
  * Web routes
  */
 
+pub fn team_registration_open() -> Result<(), Template> {
+    let val:bool = config::get_option("team_registration_open").parse().unwrap();
+    match val {
+        true => Ok(()),
+        false => Err(Template::render("error", context!{message:"It is currently not possible to register a team"}))
+    }
+}
+
 #[get("/")]
 pub fn get_index() -> Redirect {
     Redirect::to("https://european-aerostudent-games.com")
@@ -304,6 +320,10 @@ pub async fn get_ressource(path: PathBuf) -> Option<NamedFile> {
 
 #[get("/welcome/<order_ref>")]
 pub async fn get_welcome(mut db: Connection<Attendize>, order_ref: &str) -> Option<Template> {
+    match team_registration_open() {
+        Ok(_) => (),
+        Err(t) => return Some(t)
+    }
     match retrieve_attendee(&mut *db, order_ref).await {
         Ok(attendee) => {
             let context = context! {sports: attendee.sports, order_ref: order_ref};
@@ -322,6 +342,11 @@ pub async fn get_welcome(mut db: Connection<Attendize>, order_ref: &str) -> Opti
  */
 #[get("/compose/<order_ref>/<sport_name>")]
 pub async fn get_compose(mut db: Connection<Attendize>, order_ref: &str, sport_name: &str) -> Option<Template> {
+    match team_registration_open() {
+        Ok(_) => (),
+        Err(t) => return Some(t)
+    }
+
     match retrieve_attendee(&mut *db, order_ref).await {
         Ok(id_attendee) => {
             match find_sport(sport_name, Some(id_attendee.gender)) {
