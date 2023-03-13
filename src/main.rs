@@ -711,7 +711,9 @@ fn rocket() -> rocket::Rocket<rocket::Build> {
         ])
         .mount("/view", routes![
             get_list_teams,
-            get_team
+            get_team,
+            get_no_team_list,
+            get_no_team
         ])
         .register("/api", catchers![not_found, internal_error])
 }
