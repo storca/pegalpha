@@ -1,3 +1,5 @@
+{% extends "base" %}
+
 {% block head %}
 <title>No team for {{sport}}</title>
 {% endblock head %}
