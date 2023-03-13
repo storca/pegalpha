@@ -535,12 +535,13 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
     }
     let mut members:Vec<CompleteTeamMember> = vec![];
     let members_qry = sqlx::query(
-        "SELECT a.id, a.first_name, a.last_name, a.email, qb.answer_text school, qc.answer_text phone, 
+        "SELECT a.id, a.first_name, a.last_name, a.email, qb.answer_text school, qc.answer_text phone, qd.answer_text gender
         CONCAT(o.order_reference, '-', a.reference_index) attendee_ref
         FROM attendees a
         JOIN question_answers qa ON qa.attendee_id = a.id
         JOIN question_answers qb ON qb.attendee_id = a.id
         JOIN question_answers qc ON qc.attendee_id = a.id
+        JOIN question_answers qd ON qd.attendee_id = a.id
         JOIN orders o ON a.order_id = o.id
         WHERE a.event_id = 2 AND a.is_cancelled = 0
         AND qa.question_id IN (5, 6, 7, 8) AND qa.answer_text = ?
@@ -550,7 +551,7 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
             JOIN teams t ON tm.team_id = t.id
             WHERE t.sport = ?
         )
-        AND qc.question_id = 4
+        AND qc.question_id = 4 AND qd.question_id = 17
         ORDER BY school;"
     )
     .bind(sport)
@@ -564,11 +565,12 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
             attendee_id: r.get(0),
             first_name: r.get(1),
             last_name: r.get(2),
+            gender: r.get(6),
             school: r.get(4),
             sports: vec![],
             email: r.get(3),
             phone: r.get(5),
-            attendee_ref: r.get(6)
+            attendee_ref: r.get(7)
         };
         let sports = sqlx::query(
             "SELECT DISTINCT(answer_text) FROM question_answers WHERE attendee_id = ? AND question_id IN (5, 6, 7, 8)"

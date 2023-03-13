@@ -99,6 +99,7 @@ pub struct CompleteTeamMember {
     pub attendee_id: u32,
     pub first_name: String,
     pub last_name: String,
+    pub gender: String,
     pub school: String,
     pub sports: Vec<String>,
     pub email: String,
@@ -109,34 +110,39 @@ pub struct CompleteTeamMember {
 impl CompleteTeamMember {
     pub async fn from_team_member(db: &mut MySqlConnection, member: &TeamMember) -> CompleteTeamMember {
         let result = sqlx::query(
-            "SELECT a.email, qa.answer_text,
+            "SELECT a.email, qa.answer_text, qb.answer_text
             CONCAT(o.order_reference, '-', a.reference_index) attendee_ref
             FROM attendees a
             JOIN orders o ON a.order_id = o.id
             JOIN question_answers qa ON qa.attendee_id = a.id
-            WHERE qa.question_id = 4 AND a.id = ?"
+            JOIN question_answers qb ON qb.attendee_id = a.id
+            WHERE qa.question_id = 3 AND qb.question_id = 17 AND a.id = ?"
         )
         .bind(member.attendee_id)
         .fetch_one(&mut *db).await;
         let email:String;
         let phone:String;
         let attendee_ref:String;
+        let gender:String;
         match result {
             Ok(r) => {
                 email = r.get(0);
                 phone = r.get(1);
-                attendee_ref = r.get(2);
+                attendee_ref = r.get(3);
+                gender = r.get(2);
             }
             Err(_) => {
                 email = format!("none");
                 phone = format!("none");
                 attendee_ref = format!("none");
+                gender = format!("none");
             }
         }
         CompleteTeamMember {
             attendee_id: member.attendee_id,
             first_name: member.first_name.clone(),
             last_name: member.last_name.clone(),
+            gender: gender,
             school: member.school.clone(),
             sports: member.sports.clone(),
             email: email,
