@@ -504,6 +504,78 @@ pub async fn get_list_teams(mut db: Connection<Attendize>, secret:&str, school:O
     }
 }
 
+#[get("/no-team/list/<secret>")]
+pub async fn get_no_team_list(mut db: Connection<Attendize>, secret: &str) -> Option<Template> {
+    let cfg_secret = get_option("secret");
+    if cfg_secret.as_str() != secret {
+        return None;
+    }
+    let sports_fut = sqlx::query(
+        "SELECT name FROM question_options WHERE question_id IN (5,6,8) ORDER BY name"
+    )
+    .fetch_all(&mut *db);
+
+    let mut sports:Vec<String> = vec![];
+    for row in sports_fut.await.ok()? {
+        sports.push(row.get(0));
+    }
+    Some(
+        Template::render("no_team_list", context!{sports: sports, secret: secret})
+    )
+}
+
+#[get("/no-team/members/<sport>/<secret>")]
+pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &str) -> Option<Template> {
+    let cfg_secret = get_option("secret");
+    if cfg_secret.as_str() != secret {
+        return None;
+    }
+    let mut members:Vec<CompleteTeamMember> = vec![];
+    let members_qry = sqlx::query(
+        "SELECT a.id, a.first_name, a.last_name, a.email, qb.answer_text school, qc.answer_text phone FROM attendees a
+        JOIN question_answers qa ON qa.attendee_id = a.id
+        JOIN question_answers qb ON qb.attendee_id = a.id
+        JOIN question_answers qc ON qc.attendee_id = a.id
+        WHERE a.event_id = 2 AND a.is_cancelled = 0
+        AND qa.question_id IN (5, 6, 7, 8) AND qa.answer_text = ?
+        AND qb.question_id = 15
+        AND a.id NOT IN (SELECT attendee_id FROM team_members)
+        AND qc.question_id = 4
+        ORDER BY school"
+    )
+    .bind(sport)
+    .fetch_all(&mut *db)
+    .await
+    .ok()?;
+    
+    for r in members_qry {
+        let mut member = CompleteTeamMember {
+            attendee_id: r.get(0),
+            first_name: r.get(1),
+            last_name: r.get(2),
+            school: r.get(4),
+            sports: vec![],
+            email: r.get(4),
+            phone: r.get(5)
+        };
+        let sports = sqlx::query(
+            "SELECT answer_text FROM question_answers WHERE attendee_id = ? AND question_id IN (5, 6, 7, 8)"
+        )
+        .bind(member.attendee_id)
+        .fetch_all(&mut *db)
+        .await
+        .ok()?;
+        
+        for r in sports {
+            member.sports.push(r.get(0));
+        }
+        members.push(member);
+    }
+    Some(
+        Template::render("view_team", context!{members: members, name: "No team", sport: sport, gender: ""})
+    )
+}
+
 #[get("/team/<uuid>")]
 pub async fn get_team(mut db: Connection<Attendize>, uuid:&str) -> Option<Template> {
     let row = sqlx::query(

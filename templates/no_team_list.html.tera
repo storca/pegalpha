@@ -1,0 +1,22 @@
+{% extends "base" %}
+
+{% block body %}
+<table class="team-table">
+    <tbody>
+        <tr>
+            <th>School</th>
+            <th>Team sport</th>
+            <th></th>
+        </tr>
+        {% for sport in sports %}
+        <tr>
+            <td>{{sport}}</td>
+            <td>
+                <a href="/view/no-team/members/{{sport}}/{{secret}}" target="_blank">View members</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock body %}

@@ -50,7 +50,7 @@
         <option value="333">Cranfield</option>
         <option value="335">Rome</option>
         <option value="338">Berlin</option>
-        <option value="339">Sup</option>
+        <option value="339">Supaéro</option>
         <option value="340">ENSPIMA</option>
     </select>
     <input type="submit" value="Filter">
