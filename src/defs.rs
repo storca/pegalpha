@@ -102,13 +102,17 @@ pub struct CompleteTeamMember {
     pub school: String,
     pub sports: Vec<String>,
     pub email: String,
-    pub phone: String
+    pub phone: String,
+    pub attendee_ref: String
 }
 
 impl CompleteTeamMember {
     pub async fn from_team_member(db: &mut MySqlConnection, member: &TeamMember) -> CompleteTeamMember {
         let result = sqlx::query(
-            "SELECT a.email, qa.answer_text FROM attendees a
+            "SELECT a.email, qa.answer_text,
+            CONCAT(o.order_reference, '-', a.reference_index) attendee_ref
+            FROM attendees a
+            JOIN orders o ON a.order_id = o.id
             JOIN question_answers qa ON qa.attendee_id = a.id
             WHERE qa.question_id = 4 AND a.id = ?"
         )
@@ -116,14 +120,17 @@ impl CompleteTeamMember {
         .fetch_one(&mut *db).await;
         let email:String;
         let phone:String;
+        let attendee_ref:String;
         match result {
             Ok(r) => {
                 email = r.get(0);
                 phone = r.get(1);
+                attendee_ref = r.get(2);
             }
             Err(_) => {
                 email = format!("none");
                 phone = format!("none");
+                attendee_ref = format!("none");
             }
         }
         CompleteTeamMember {
@@ -133,7 +140,8 @@ impl CompleteTeamMember {
             school: member.school.clone(),
             sports: member.sports.clone(),
             email: email,
-            phone: phone
+            phone: phone,
+            attendee_ref: attendee_ref
         }
     }
 }

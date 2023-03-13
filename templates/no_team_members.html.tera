@@ -1,0 +1,36 @@
+{% block head %}
+<title>No team for {{sport}}</title>
+{% endblock head %}
+
+{% block body %}
+    <h1>No team</h1>
+    <h2>People that chose {{sport}} but did not register in a {{sport}} team</h2>
+    <table class="team-table">
+        <tbody>
+            <tr>
+                <th>First name</th>
+                <th>Last name</th>
+                <th>Email</th>
+                <th>School</th>
+                <th>Attendee reference</th>
+                <th>Sports</th>
+            </tr>
+            {% for member in members %}
+            <tr class="team-row">
+                <td>{{member.first_name}}</td>
+                <td>{{member.last_name}}</td>
+                <td><a href="mailto:{{member.email}}">{{member.email}}</a></td>
+                <td>{{member.school}}</td>
+                <td>{{member.attendee_ref}}</td>
+                <td>
+                    <ul>
+                    {% for sport in member.sports %}
+                        <li>{{sport}}</li>
+                    {% endfor %}
+                    </ul>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock body %}

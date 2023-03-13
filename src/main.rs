@@ -532,10 +532,13 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
     }
     let mut members:Vec<CompleteTeamMember> = vec![];
     let members_qry = sqlx::query(
-        "SELECT a.id, a.first_name, a.last_name, a.email, qb.answer_text school, qc.answer_text phone FROM attendees a
+        "SELECT a.id, a.first_name, a.last_name, a.email, qb.answer_text school, qc.answer_text phone, 
+        CONCAT(o.order_reference, '-', a.reference_index) attendee_ref
+        FROM attendees a
         JOIN question_answers qa ON qa.attendee_id = a.id
         JOIN question_answers qb ON qb.attendee_id = a.id
         JOIN question_answers qc ON qc.attendee_id = a.id
+        JOIN orders o ON a.order_id = o.id
         WHERE a.event_id = 2 AND a.is_cancelled = 0
         AND qa.question_id IN (5, 6, 7, 8) AND qa.answer_text = ?
         AND qb.question_id = 15
@@ -561,7 +564,8 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
             school: r.get(4),
             sports: vec![],
             email: r.get(3),
-            phone: r.get(5)
+            phone: r.get(5),
+            attendee_ref: r.get(6)
         };
         let sports = sqlx::query(
             "SELECT DISTINCT(answer_text) FROM question_answers WHERE attendee_id = ? AND question_id IN (5, 6, 7, 8)"
@@ -577,7 +581,7 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
         members.push(member);
     }
     Some(
-        Template::render("view_team", context!{members: members, name: "No team", sport: sport, gender: format!("People that choosed {sport} and did not register in a {sport} team")})
+        Template::render("no_team_members", context!{members: members, sport: sport})
     )
 }
 
