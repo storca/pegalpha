@@ -1,5 +1,66 @@
 {% extends "base" %}
 
+{% block script %}
+<script type="text/javascript">
+    let last_index = 0;
+    let references = [{% for member in members %}'{{member.attendee_ref}}',{% endfor %}];
+    let nb_members = references.length;
+
+    function displayError(message) {
+        let error = document.getElementById("error-message");
+        error.innerHTML = "<span class=\"closebtn\" onclick=\"this.parentElement.style.display=\'none\';\">&times;</span>"
+        error.innerHTML += message;
+        error.style.display = "block";
+    }
+    function handleAdd(event) {
+        let attendee_ref = document.getElementById('attendee-ref').value;
+        document.getElementById('attendee-ref').value = '';
+        let button = document.getElementById('member-submit');
+        button.disabled = true;
+
+        if(references.includes(attendee_ref)) {
+            displayError(`Member is already in the team!`);
+            button.disabled = false;
+            event.preventDefault();
+            return;
+        }
+
+        fetch(`/api/team/edit/{{uuid}}/add/${attendee_ref}`)
+        .then(response => response.json())
+        .then(data => {
+            if(data.member == null) {
+                displayError(data.message);
+            }
+            else {
+                location.reload();
+            }
+        });
+
+        button.disabled = false;
+        event.preventDefault();
+    }
+
+    function removeMember(attendee_ref) {
+        fetch(`/api/team/edit/{{uuid}}/del/${attendee_ref}`)
+        .then(response => response.json())
+        .then(data => {
+            if(data.code = 'Ok') {
+                location.reload();
+            }
+            else {
+                displayError(data.message);
+            }
+        })
+    }
+
+    window.onload = function() {
+        let memberForm = document.getElementById("add-member-form");
+        memberForm.addEventListener('submit', handleAdd);
+    }
+</script>
+
+{% endblock script %}
+
 {% block above_table %}
 <h1>Your team</h1>
 {% endblock above_table %}
@@ -7,20 +68,30 @@
 {% block body %}
     <h1>{{name}}</h1>
     <h2>{{sport}} - {{gender}}</h2>
+    <form id="add-member-form">
+        <p>Add a member to this team with his <b>attendee reference</b> below</p>
+        <label for="attendee-ref">Attendee reference</label>
+        <input type="text" id="attendee-ref" spellcheck="false" pattern="^[a-zA-Z0-9]{7,8}-[0-9]{1,2}$" title="Attendee reference, eg : Cy4st8O-2" placeholder="Hyg5h0f-2" required/>
+        <button type="submit" id="member-submit" class="green-button">Add</button>
+    </form>
+    <div id="error-message" class="alert"></div>
     <table class="team-table">
         <tbody>
             <tr>
                 <th>First name</th>
                 <th>Last name</th>
                 <th>Email</th>
+                <th>Gender</th>
                 <th>School</th>
                 <th>Sports</th>
+                <th></th>
             </tr>
             {% for member in members %}
             <tr class="team-row">
                 <td>{{member.first_name}}</td>
                 <td>{{member.last_name}}</td>
                 <td><a href="mailto:{{member.email}}">{{member.email}}</a></td>
+                <td>{{member.gender}}</td>
                 <td>{{member.school}}</td>
                 <td>
                     <ul>
@@ -29,6 +100,7 @@
                     {% endfor %}
                     </ul>
                 </td>
+                <td><button onclick="removeMember('{{member.attendee_ref}}')">Remove member</button></td>
             </tr>
             {% endfor %}
         </tbody>

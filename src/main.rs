@@ -99,7 +99,7 @@ pub async fn get_check_attendee(mut db: Connection<Attendize>, team_sport: &str,
                 }
             }
 
-            let m = TeamMember::from_identified_attendee(&id_attendee, &mut *db).await;
+            let m = CompleteTeamMember::from_attendee_id(&mut *db, id_attendee.id).await.unwrap();
             let fullname = format!("{} {}", m.first_name, m.last_name);
 
             match validate_attendee(&mut db, &id_attendee, &sport.unwrap()).await {
@@ -114,7 +114,7 @@ pub async fn get_check_attendee(mut db: Connection<Attendize>, team_sport: &str,
                 AttendeeStatus::InvalidGender =>
                     response.message = String::from(format!("{team_sport} does not allow mixed teams, every team member must be of gender {team_gender}")),
                 AttendeeStatus::Ok => {
-                    response.member = Some(TeamMember::from_identified_attendee(&id_attendee, &mut *db).await);
+                    response.member = Some(m);
                     response.message = String::from("Ok");
                 }
             }
@@ -299,6 +299,117 @@ pub async fn get_can_register(mut db: Connection<Attendize>, sport_name: &str, o
     return Json(response);
 }
 
+#[get("/team/edit/<uuid>/add/<order_ref>")]
+pub async fn get_add_team_member(mut db: Connection<Attendize>, uuid:&str, order_ref: &str) -> Json<CheckAttendeeResponse> {
+    let mut response = CheckAttendeeResponse{
+        message: format!("Unknown error"),
+        member: None
+    };
+    match retrieve_attendee(&mut *db, order_ref).await {
+        Ok(ida) => {
+            let res = sqlx::query(
+                "SELECT id, sport FROM teams WHERE uuid = ?"
+            )
+            .bind(uuid)
+            .fetch_optional(&mut *db)
+            .await
+            .unwrap();
+
+            if res.is_none() {
+                response.message = format!("Team not found");
+                return Json(response);
+            }
+
+            let row = res.unwrap();
+            let team_id:u32 = row.get(0);
+            let team_sport:&str = row.get(1);
+            let sport = find_sport(team_sport, Some(ida.gender)).unwrap();
+            let status = validate_attendee(&mut *db, &ida, &sport).await;
+
+            if status == AttendeeStatus::Ok {
+                let member = CompleteTeamMember::from_attendee_id(&mut *db, ida.id).await.unwrap();
+                let res = sqlx::query(
+                    "INSERT INTO team_members(attendee_id, team_id) VALUES (?, ?)"
+                )
+                .bind(ida.id)
+                .bind(team_id)
+                .execute(&mut *db).await;
+                
+                match res {
+                    Ok(_) => {
+                        response.message = format!("Ok");
+                        response.member = Some(member);
+                        return Json(response);
+                    },
+                    Err(e) => {
+                        response.message = format!("Team insert error : {:?}", e);
+                        return Json(response);
+                    }
+                }
+            }
+            else {
+                response.message = format!("Error : {:?}", status);
+                return Json(response);
+            }
+        },
+        Err(_) => {
+            response.message = format!("Attendee not found");
+            return Json(response);
+        }
+    }
+}
+
+#[get("/team/edit/<uuid>/del/<order_ref>")]
+pub async fn get_del_team_member(mut db: Connection<Attendize>, uuid: &str, order_ref: &str) -> Json<SimpleResponse> {
+    let mut response = SimpleResponse {
+        code: SimpleResponseCode::ServerError,
+        message: format!("Unknown error")
+    };
+    match retrieve_attendee(&mut *db, order_ref).await {
+        Ok(ida) => {
+            let res = sqlx::query(
+                "SELECT id FROM teams WHERE uuid = ?"
+            )
+            .bind(uuid)
+            .fetch_optional(&mut *db)
+            .await
+            .unwrap();
+
+            if res.is_none() {
+                response.code = SimpleResponseCode::UserError;
+                response.message = format!("Team not found");
+                return Json(response);
+            }
+
+            let team_id:u32 = res.unwrap().get(0);
+
+            let delete_res = sqlx::query(
+                "DELETE FROM team_members WHERE team_id = ? AND attendee_id = ?"
+            )
+            .bind(team_id)
+            .bind(ida.id)
+            .execute(&mut *db).await;
+
+            match delete_res {
+                Ok(_) => {
+                    response.message = String::from("Ok");
+                    response.code = SimpleResponseCode::Ok;
+                },
+                Err(e) => {
+                    response.message = format!("Could not delete member : {:?}", e);
+                }
+            }
+            
+            return Json(response);
+        },
+        Err(e) => {
+            response.code = SimpleResponseCode::UserError;
+            response.message = format!("Attendee not found : {e}");
+            return Json(response);
+        }
+    }
+}
+
 /**
  * Web routes
  */
@@ -357,7 +468,7 @@ pub async fn get_compose(mut db: Connection<Attendize>, order_ref: &str, sport_n
                     match validate_attendee(&mut *db, &id_attendee, &sport).await {
                         AttendeeStatus::Ok => {
                             let context = context! {
-                                captain: TeamMember::from_identified_attendee(&id_attendee, &mut *db).await,
+                                captain: CompleteTeamMember::from_attendee_id(&mut *db, id_attendee.id).await,
                                 sport: sport,
                                 captain_ref: order_ref,
                                 school_id: id_attendee.school_id
@@ -371,32 +482,6 @@ pub async fn get_compose(mut db: Connection<Attendize>, order_ref: &str, sport_n
             }
         },
         Err(_) => None
-    }
-}
-
-#[get("/test/<sport_name>")]
-pub async fn get_test(sport_name: &str) -> Option<Template> {
-    let mut mock_data: Vec<TeamMember> = vec!();
-    for i in 1..10 {
-        mock_data.push(
-            TeamMember { 
-                attendee_id: 1,
-                first_name: String::from(format!("first name {i}")), 
-                last_name: String::from(format!("last name {i}")), 
-                school: String::from("School"),
-                sports: vec![String::from("Beach volley"), String::from("Rugby")] 
-            }
-        );
-    }
-    match find_sport(sport_name, Some(AttendeeGender::F)) {
-        Ok(s) => {
-            let context = context! {captain: &mock_data[0], sport:s};
-            Some(Template::render("compose_team", &context))
-        }
-        Err(e) => {
-            warn!("{}", e);
-            None
-        }
     }
 }
 
@@ -615,14 +700,13 @@ pub async fn get_team(mut db: Connection<Attendize>, uuid:&str) -> Option<Templa
         match get_attendee(&mut *db, row.get(0)).await {
             // Only add valid attendees
             Ok(ida) => {
-                let member = TeamMember::from_identified_attendee(&ida, &mut *db).await;
-                let full_member = CompleteTeamMember::from_team_member(&mut *db, &member).await;
+                let full_member = CompleteTeamMember::from_attendee_id(&mut *db, ida.id).await?;
                 members.push(full_member);
             },
             Err(_) => ()
         }
     }
-    Some(Template::render("view_team", context!{members: members, name, sport, gender}))
+    Some(Template::render("view_team", context!{members: members, name, sport, gender, uuid}))
 }
 
 #[get("/shotgun/<order_ref>?<choice>")]
@@ -709,7 +793,9 @@ fn rocket() -> rocket::Rocket<rocket::Build> {
             get_check_attendee, 
             get_attendee_sports, 
             post_create_team, 
-            get_can_register
+            get_can_register,
+            get_add_team_member,
+            get_del_team_member
         ])
         .mount("/", routes![
             get_index, 
@@ -718,7 +804,6 @@ fn rocket() -> rocket::Rocket<rocket::Build> {
             get_shotgun
         ])
         .mount("/team", routes![
-            get_test,
             get_compose,
             get_team_success,
             get_team_help

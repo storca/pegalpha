@@ -110,7 +110,7 @@ pub struct CompleteTeamMember {
 impl CompleteTeamMember {
     pub async fn from_team_member(db: &mut MySqlConnection, member: &TeamMember) -> CompleteTeamMember {
         let result = sqlx::query(
-            "SELECT a.email, qa.answer_text, qb.answer_text
+            "SELECT a.email, qa.answer_text, qb.answer_text,
             CONCAT(o.order_reference, '-', a.reference_index) attendee_ref
             FROM attendees a
             JOIN orders o ON a.order_id = o.id
@@ -149,6 +149,49 @@ impl CompleteTeamMember {
             phone: phone,
             attendee_ref: attendee_ref
         }
+    }
+    pub async fn from_attendee_id(db: &mut MySqlConnection, attendee_id:u32) -> Option<CompleteTeamMember> {
+        let r = sqlx::query(
+            "SELECT a.first_name, a.last_name, a.email, qa.answer_text phone, qb.answer_text gender, qc.answer_text school,
+            CONCAT(o.order_reference, '-', a.reference_index) attendee_ref
+            FROM attendees a
+            JOIN orders o ON a.order_id = o.id
+            JOIN question_answers qa ON qa.attendee_id = a.id
+            JOIN question_answers qb ON qb.attendee_id = a.id
+            JOIN question_answers qc ON qc.attendee_id = a.id
+            WHERE qa.question_id = 4 AND qb.question_id = 17 AND qc.question_id = 15
+            AND a.id = ?"
+        )
+        .bind(attendee_id)
+        .fetch_one(&mut *db)
+        .await
+        .ok()?;
+
+        let mut member = CompleteTeamMember {
+            attendee_id: attendee_id,
+            first_name: r.get(0),
+            last_name: r.get(1),
+            gender: r.get(4),
+            school: r.get(5),
+            sports: vec![],
+            email: r.get(2),
+            phone: r.get(3),
+            attendee_ref: r.get(6)
+        };
+
+        let sports = sqlx::query(
+            "SELECT DISTINCT(answer_text) FROM question_answers WHERE attendee_id = ? AND question_id IN (5, 6, 7, 8)"
+        )
+        .bind(member.attendee_id)
+        .fetch_all(&mut *db)
+        .await
+        .ok()?;
+        
+        for row in sports {
+            member.sports.push(row.get(0));
+        }
+
+        Some(member)
     }
 }
 
@@ -205,5 +248,5 @@ pub struct SimpleResponse {
 #[serde(crate = "rocket::serde")]
 pub struct CheckAttendeeResponse {
     pub message: String,
-    pub member: Option<TeamMember>
+    pub member: Option<CompleteTeamMember>
 }
