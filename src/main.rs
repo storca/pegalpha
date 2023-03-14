@@ -783,6 +783,10 @@ pub async fn get_shotgun(mut db: Connection<Attendize>, order_ref: &str, choice:
     }
 }
 
+#[get("/deposit/success")]
+pub async fn get_deposit_success() -> Template {
+    Template::render("success", context!{message: "Your deposit has been received, see you soon!"})
+}
 
 #[launch]
 fn rocket() -> rocket::Rocket<rocket::Build> {
@@ -801,7 +805,8 @@ fn rocket() -> rocket::Rocket<rocket::Build> {
             get_index, 
             get_ressource, 
             get_welcome,
-            get_shotgun
+            get_shotgun,
+            get_deposit_success
         ])
         .mount("/team", routes![
             get_compose,
