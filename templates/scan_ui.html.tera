@@ -23,7 +23,7 @@ div {
 .scan-elem {
     justify-content: center;
     margin-top: 20px;
-    font-size: 30px;
+    font-size: 50px;
 }
 .resume-btn {
     background-color: var(--success-color);
@@ -34,7 +34,7 @@ div {
     border-radius: 4px;
     cursor: pointer;
     font-family: 'Montserrat', sans-serif;
-    font-size: 15px;
+    font-size: 30px;
 }
 .cuff {
     border-radius: 4px;
