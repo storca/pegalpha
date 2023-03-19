@@ -213,7 +213,7 @@ div {
         videoElem,
         processResult,
         {
-            
+            highlightScanRegion: true
         },
     );
     qrScanner.start();
