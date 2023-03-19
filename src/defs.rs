@@ -244,9 +244,10 @@ pub struct SimpleResponse {
     pub code: SimpleResponseCode
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct CheckAttendeeResponse {
     pub message: String,
-    pub member: Option<CompleteTeamMember>
+    pub member: Option<CompleteTeamMember>,
+    pub ticket_title: String
 }

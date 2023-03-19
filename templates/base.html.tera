@@ -8,6 +8,8 @@
         {% block head %}
             <title>EAG Team registration</title>
         {% endblock head %}
+        {% block style %}
+        {% endblock style %}
         {% block script %}
         {% endblock script %}
     </head>

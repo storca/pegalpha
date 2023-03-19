@@ -1,0 +1,248 @@
+{% extends "base" %}
+
+{% block style %}
+<style>
+div {
+    display: flex;
+}
+.results-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.scan-results {
+    flex-direction: column;
+    background-color: #00124f;
+    border-radius: 4px;
+}
+
+.status-image {
+    max-height: 100px;
+}
+.scan-elem {
+    justify-content: center;
+    margin-top: 20px;
+    font-size: 30px;
+}
+.resume-btn {
+    background-color: var(--success-color);
+    color: var(--text-color);
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 15px;
+}
+.cuff {
+    border-radius: 4px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 200px;
+    height: 30px;
+}
+.member-cuffs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.aa-cuffs {
+    width: inherit;
+    height: inherit;
+}
+</style>
+{% endblock style %}
+
+{% block script %}
+<script type="module">
+    import QrScanner from '/static/qr-scanner.min.js';
+
+    const basic_color = '#ff0c0c'; //red
+    const aa_first = '#e2ff28'; //yellow
+    const aa_second = '#08ff0c'; //green
+    const first_party = '#ff1cc3'; //pink
+    const second_party = '#b2b2b2' //grey
+    const both_parties = '#60c1ff' //light blue
+
+    const food_aa = '3 breakfasts, 2 meals, 3 dinners';
+    const food_semi = '2 meals, 3 dinners';
+
+    function displayResult(status) {
+        let result = document.getElementById('scan-results');
+        let btn = document.getElementById('resume-btn');
+        if(status) {
+            result.style = "display: flex;";
+            btn.style = 'display: flex;';
+        }
+        else {
+            result.style = "display: none;";
+            btn.style = 'display: none;';
+        }
+    }
+
+    function displayStatusImage(isError) {
+        if(isError) { //display error
+            document.getElementById('error-image').style = 'display: flex;';
+            document.getElementById('success-image').style = 'display: none;';
+            let audio = new Audio('/static/error.mp3');
+            audio.play();
+        }
+        else {
+            document.getElementById('success-image').style = 'display: flex;';
+            document.getElementById('error-image').style = 'display: none;';
+            let audio = new Audio('/static/sectionpass.mp3');
+            audio.play();
+        }
+    }
+
+    function setT(id, val) {
+        document.getElementById(id).innerHTML = val;
+    }
+
+    function resumeScanning() {
+        setT('error', '');
+        setT("name", '');
+        setT("school", '');
+        setT("sports", '');
+        setT('formula-cuff', '');
+        setT('party-cuff', '');
+        setT('ticket-title', '');
+        document.getElementById('formula-cuff').style = '';
+        document.getElementById('party-cuff').style = '';
+        setT('food-tickets', '');
+        displayResult(false);
+        qrScanner.start();
+    }
+
+    function processCuffsAndMeals(ticket_title) {
+        let formula_cuff = document.getElementById('formula-cuff');
+        let party_cuff = document.getElementById('party-cuff');
+        let food_tickets = document.getElementById('food-tickets');
+
+        const tt = ticket_title;
+        //Formulas
+        if(tt.includes('BASIC')) {
+            formula_cuff.style = `background-color: ${basic_color};`;
+        }
+        else if(tt.includes('SEMI-INCLUSIVE') && !tt.includes('ELISA')) {
+            formula_cuff.style = `background-color: ${basic_color};`;
+        }
+        else if(tt.includes('ALL-INCLUSIVE') || (tt.includes('SEMI-INCLUSIVE') && tt.includes('ELISA'))) {
+            let first = document.createElement('div');
+            first.style = `background-color: ${aa_first};`;
+            first.className = 'aa-cuffs';
+            let second = document.createElement('div');
+            second.style = `background-color: ${aa_second};`;
+            second.className = 'aa-cuffs';
+            formula_cuff.appendChild(first);
+            formula_cuff.appendChild(second);
+        }
+        else {
+            f_cuff_div.style = 'background-color: #000000;';
+        }
+
+        //Food tickets
+        if(tt.includes('SEMI-INCLUSIVE')) {
+            food_tickets.innerHTML = food_semi;
+        }
+        else if(tt.includes('ALL-INCLUSIVE')) {
+            food_tickets.innerHTML = food_aa;
+        }
+        else {
+            food_tickets.innerHTML = 'No food tickets';
+        }
+
+        //Parties
+        if(tt.includes('[P]')) {
+            party_cuff.style = `background-color: ${first_party};`;
+        }
+        else if(tt.includes('[C]')) {
+            party_cuff.style = `background-color: ${second_party};`;
+        }
+        else if(tt.includes('[F]')) {
+            party_cuff.style = `background-color: ${both_parties}`;
+        }
+        else {
+            party_cuff.innerHTML = 'No parties';
+        }
+    }
+
+    function processResult(result) {
+        const text = result.data;
+        qrScanner.stop();
+        fetch(`/api/check-in/mark/{{uuid}}/${text}`)
+        .then(response => response.json())
+        .then(data => {
+            displayResult(true);
+            if(data.code == 'UserError') {
+                setT('error', 'Ticket not found');
+                displayStatusImage(true);
+            }
+            else if(data.member == null) {
+                setT('error', data.message);
+                displayStatusImage(true);
+            }
+            else {
+                let member = data.member;
+                displayStatusImage(false);
+                setT("name", `${member.first_name} ${member.last_name}`);
+                setT("school", member.school);
+                setT('ticket-title', data.ticket_title);
+                if(member.sports.length == 0) {
+                    setT("sports", 'No sports');    
+                }
+                else {
+                    let sports_list = document.createElement('ul');
+                    for(const sport of member.sports) {
+                        let sport_item = document.createElement('li');
+                        sport_item.innerHTML = sport;
+                        sports_list.appendChild(sport_item);
+                    }
+                    document.getElementById('sports').appendChild(sports_list);
+                }
+                processCuffsAndMeals(data.ticket_title);
+            }
+        });
+    }
+    document.getElementById('resume-btn').addEventListener('click', resumeScanning, false);
+    let videoElem = document.getElementById('video');
+    const qrScanner = new QrScanner(
+        videoElem,
+        processResult,
+        {
+            
+        },
+    );
+    qrScanner.start();
+</script>
+{% endblock script %}
+
+{% block body %}
+{% if read_only %}
+<h2>Read only!</h2>
+{% endif %}
+<h2>EAG Check-in</h2>
+<div class="results-container">
+    <div class="text scan-results" id="scan-results" style="display: none;">
+        <div class="scan-elem" id="status-image">
+            <img class="status-image" id="error-image" alt="error-image" src="/static/error.png" style="display: none;">
+            <img class="status-image" id="success-image" src="/static/checkmark.png" alt="success-image" style="display: none;">
+        </div>
+        <div class="scan-elem" id="error" style="color: var(--error-color);"></div>
+        <div class="scan-elem" id="name"></div>
+        <div class="scan-elem" id="ticket-title"></div>
+        <div class="scan-elem" id="school"></div>
+        <div class="scan-elem" id="sports"></div>
+        <div class="scan-elem member-cuffs" id="cuffs">
+            <div class="cuff" id="formula-cuff"></div>
+            <div class="cuff" id="party-cuff"></div>
+        </div>
+        <div class="scan-elem" id="food-tickets"></div>
+    </div>
+    <button id="resume-btn" class="resume-btn scan-elem" style="display: none;">Scan another ticket</button>
+    <video id="video" class="video-scanner"></video>
+</div>
+{% endblock body %}

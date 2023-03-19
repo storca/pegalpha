@@ -33,6 +33,7 @@ use defs::*;
 use checks::*;
 
 use rocket_db_pools::sqlx::Row;
+use sqlx::types::chrono::NaiveDateTime;
 
 #[derive(Database, Clone)]
 #[database("attendize")]
@@ -72,7 +73,8 @@ pub async fn get_attendee(mut db: Connection<Attendize>, order_ref:&str) -> Opti
 pub async fn get_check_attendee(mut db: Connection<Attendize>, team_sport: &str, team_gender: &str, order_ref: &str) -> Json<CheckAttendeeResponse> {
     let mut response = CheckAttendeeResponse {
         message: String::from("Error : unhandled case"),
-        member: None
+        member: None,
+        ticket_title: String::from("")
     };
 
     let attendee = retrieve_attendee(&mut db, order_ref).await;
@@ -303,7 +305,8 @@ pub async fn get_can_register(mut db: Connection<Attendize>, sport_name: &str, o
 pub async fn get_add_team_member(mut db: Connection<Attendize>, uuid:&str, order_ref: &str) -> Json<CheckAttendeeResponse> {
     let mut response = CheckAttendeeResponse{
         message: format!("Unknown error"),
-        member: None
+        member: None,
+        ticket_title: String::from("")
     };
     match retrieve_attendee(&mut *db, order_ref).await {
         Ok(ida) => {
@@ -517,7 +520,7 @@ fn not_found(req: &Request) -> Json<SimpleResponse> {
  */
 #[get("/teams/<secret>?<school>&<sport>")]
 pub async fn get_list_teams(mut db: Connection<Attendize>, secret:&str, school:Option<u32>, sport:Option<String>) -> Option<Template> {
-    let cfg_secret = get_option("secret");
+    let cfg_secret = get_option("sport_secret");
     if cfg_secret.as_str() != secret {
         return None;
     }
@@ -594,7 +597,7 @@ pub async fn get_list_teams(mut db: Connection<Attendize>, secret:&str, school:O
 
 #[get("/no-team/list/<secret>")]
 pub async fn get_no_team_list(mut db: Connection<Attendize>, secret: &str) -> Option<Template> {
-    let cfg_secret = get_option("secret");
+    let cfg_secret = get_option("sport_secret");
     if cfg_secret.as_str() != secret {
         return None;
     }
@@ -614,7 +617,7 @@ pub async fn get_no_team_list(mut db: Connection<Attendize>, secret: &str) -> Op
 
 #[get("/no-team/members/<sport>/<secret>")]
 pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &str) -> Option<Template> {
-    let cfg_secret = get_option("secret");
+    let cfg_secret = get_option("sport_secret");
     if cfg_secret.as_str() != secret {
         return None;
     }
@@ -788,6 +791,74 @@ pub async fn get_deposit_success() -> Template {
     Template::render("success", context!{message: "Your deposit has been received, see you soon!"})
 }
 
+/**
+ * Routes for scan app
+ */
+#[get("/check-in/<uuid>")]
+pub async fn get_check_in(uuid: &str) -> Option<Template> {
+    let cfg_secret = get_option("check_in_secret");
+    if cfg_secret.as_str() != uuid {
+        return None;
+    }
+    let read_only:bool = get_option("check_in_read_only").parse().unwrap();
+    Some(Template::render("scan_ui", context!{uuid: uuid, read_only: read_only}))
+}
+
+#[get("/check-in/mark/<uuid>/<reference>")]
+pub async fn get_mark(mut db: Connection<Attendize>, uuid: &str, reference: &str) -> Option<Json<CheckAttendeeResponse>> {
+    let mut response = CheckAttendeeResponse {
+        message: String::from("Unknown error"),
+        member: None,
+        ticket_title: String::from("")
+    };
+    let cfg_secret = get_option("check_in_secret");
+    if cfg_secret.as_str() != uuid {
+        return None;
+    }
+
+    let cr = sqlx::query(
+        "SELECT a.id, a.is_cancelled, a.has_arrived, a.arrival_time, t.title FROM attendees a
+        JOIN tickets t ON a.ticket_id = t.id
+        WHERE a.event_id = 2 AND a.private_reference_number = ?"
+    )
+    .bind(reference)
+    .fetch_one(&mut *db).await.ok()?;
+
+    let attendee_id:u32 = cr.get(0);
+    let is_cancelled:bool = cr.get(1);
+    let has_arrived:bool = cr.get(2);
+    let arrival_time:Option<NaiveDateTime> = cr.get(3);
+    let ticket_title:String = cr.get(4);
+
+    let member = CompleteTeamMember::from_attendee_id(&mut *db, attendee_id).await?;
+
+    if is_cancelled {
+        response.message = format!("{} {} has cancelled their ticket!", member.first_name, member.last_name);
+        return Some(Json(response));
+    }
+    else if has_arrived {
+        response.message = format!("{} {} ticket has already been scanned at {}", member.first_name, member.last_name, arrival_time.unwrap());
+        return Some(Json(response));
+    }
+
+    let read_only:bool = get_option("check_in_read_only").parse().unwrap();
+
+    if !read_only {
+        sqlx::query(
+            "UPDATE attendees SET has_arrived = 1, arrival_time = NOW() WHERE id=?"
+        )
+        .bind(attendee_id)
+        .execute(&mut *db)
+        .await.ok()?;
+    }
+
+    response.message = String::from("Ok");
+    response.member = Some(member);
+    response.ticket_title = ticket_title;
+
+    Some(Json(response))
+}
+
 #[launch]
 fn rocket() -> rocket::Rocket<rocket::Build> {
     rocket::build()
@@ -799,14 +870,16 @@ fn rocket() -> rocket::Rocket<rocket::Build> {
             post_create_team, 
             get_can_register,
             get_add_team_member,
-            get_del_team_member
+            get_del_team_member,
+            get_mark
         ])
         .mount("/", routes![
             get_index, 
             get_ressource, 
             get_welcome,
             get_shotgun,
-            get_deposit_success
+            get_deposit_success,
+            get_check_in
         ])
         .mount("/team", routes![
             get_compose,
