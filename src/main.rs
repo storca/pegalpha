@@ -13,6 +13,7 @@
 #[macro_use]extern crate rocket;
 
 use std::path::{Path, PathBuf};
+use async_process::Command;
 
 use rocket_db_pools::sqlx::Acquire;
 use rocket_db_pools::{sqlx, Database, Connection};
@@ -678,8 +679,8 @@ pub async fn get_no_team(mut db: Connection<Attendize>, secret: &str, sport: &st
     )
 }
 
-#[get("/team/<uuid>")]
-pub async fn get_team(mut db: Connection<Attendize>, uuid:&str) -> Option<Template> {
+#[get("/team/<uuid>?<export>")]
+pub async fn get_team(mut db: Connection<Attendize>, uuid:&str, export:Option<bool>) -> Option<Template> {
     let row = sqlx::query(
         "SELECT id, name, sport, gender FROM teams WHERE uuid=?"
     )
@@ -709,7 +710,39 @@ pub async fn get_team(mut db: Connection<Attendize>, uuid:&str) -> Option<Templa
             Err(_) => ()
         }
     }
+    if export.is_some() {
+        if export.unwrap() {
+            return Some(Template::render("print_team", context!{members: members, name, sport, gender}));
+        }
+    }
     Some(Template::render("view_team", context!{members: members, name, sport, gender, uuid}))
+}
+
+#[get("/download-team/<uuid>")]
+pub async fn get_download_team(mut db: Connection<Attendize>, uuid: &str) -> Option<NamedFile> {
+    let count:i64 = sqlx::query(
+        "SELECT COUNT(*) FROM teams WHERE uuid = ?"
+    )
+    .bind(uuid)
+    .fetch_one(&mut *db)
+    .await.ok()?
+    .get(0);
+
+    if count == 0 {
+        return None;
+    }
+    else {
+        let exists:bool = Path::new(format!("ressources/teams/{uuid}.pdf").as_str()).exists();
+        if !exists {
+            let child = Command::new("wkhtmltopdf")
+            .arg("-q")
+            .arg(format!("http://127.0.0.1:8000/view/team/{uuid}?export=true").as_str())
+            .arg(format!("ressources/teams/{uuid}.pdf").as_str())
+            .spawn().ok()?;
+            child.output().await.ok()?;
+        }
+        NamedFile::open(Path::new(format!("ressources/teams/{uuid}.pdf").as_str())).await.ok()
+    }
 }
 
 #[get("/shotgun/<order_ref>?<choice>")]
@@ -890,7 +923,8 @@ fn rocket() -> rocket::Rocket<rocket::Build> {
             get_list_teams,
             get_team,
             get_no_team_list,
-            get_no_team
+            get_no_team,
+            get_download_team
         ])
         .register("/api", catchers![not_found, internal_error])
 }

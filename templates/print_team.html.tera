@@ -1,0 +1,74 @@
+{% extends "base" %}
+
+{% block style %}
+<style>
+    h1, h2 {
+        color: black;
+    }
+    body {
+        background-color: #ffffff;
+        color: black;
+    }
+    tr:nth-child(even) {
+        background-color: #f0f0f0;
+    }
+    
+    .team-table {
+        border-color: var(--disabled-color);
+        font-family: 'Noto Sans', sans-serif;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .team-row {
+        font-size: medium;
+        list-style-type: none;
+    }
+    
+    table {
+        width: 85%;
+        text-align: center;
+    }
+</style>
+{% endblock style %}
+
+{% block above_table %}
+<h1>Your team</h1>
+{% endblock above_table %}
+
+{% block body %}
+    <img class="eag-logo" src="/static/eag-logo-black.png">
+    <h1>{{name}}</h1>
+    <h2>{{sport}} - {{gender}}</h2>
+    <div id="error-message" class="alert"></div>
+    <table class="team-table">
+        <tbody>
+            <tr>
+                <th>First name</th>
+                <th>Last name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Gender</th>
+                <th>School</th>
+                <th>Sports</th>
+            </tr>
+            {% for member in members %}
+            <tr class="team-row">
+                <td>{{member.first_name}}</td>
+                <td>{{member.last_name}}</td>
+                <td>{{member.email}}</td>
+                <td>{{member.phone}}</td>
+                <td>{{member.gender}}</td>
+                <td>{{member.school}}</td>
+                <td>
+                    <ul>
+                    {% for sport in member.sports %}
+                        <li>{{sport}}</li>
+                    {% endfor %}
+                    </ul>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock body %}

@@ -63,6 +63,7 @@
             <th>Team sport</th>
             <th>Team gender</th>
             <th></th>
+            <th></th>
         </tr>
         {% for team in teams %}
         <tr>
@@ -72,6 +73,9 @@
             <td>{{team.gender}}</td>
             <td>
                 <a href="/view/team/{{team.uuid}}" target="_blank">View team</a>
+            </td>
+            <td>
+                <a href="/view/download-team/{{team.uuid}}" target="blank">PDF</a>
             </td>
         </tr>
         {% endfor %}
