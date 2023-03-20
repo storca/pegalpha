@@ -1,3 +1,4 @@
 /target
 /release
 Rocket.toml
+/ressources/teams/*.pdf
