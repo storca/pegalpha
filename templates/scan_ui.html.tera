@@ -170,6 +170,25 @@ div {
         }
     }
 
+    function displayMember(member, ticket_title) {
+        setT("name", `${member.first_name} ${member.last_name}`);
+        setT("school", member.school);
+        setT('ticket-title', ticket_title);
+        if(member.sports.length == 0) {
+            setT("sports", 'No sports');
+        }
+        else {
+            let sports_list = document.createElement('ul');
+            for(const sport of member.sports) {
+                let sport_item = document.createElement('li');
+                sport_item.innerHTML = sport;
+                sports_list.appendChild(sport_item);
+            }
+            document.getElementById('sports').appendChild(sports_list);
+        }
+        processCuffsAndMeals(ticket_title);
+    }
+
     function processResult(result) {
         const text = result.data;
         qrScanner.stop();
@@ -181,29 +200,14 @@ div {
                 setT('error', 'Ticket not found');
                 displayStatusImage(true);
             }
-            else if(data.member == null) {
+            else if(data.message != "Ok") {
                 setT('error', data.message);
                 displayStatusImage(true);
+                displayMember(data.member, data.ticket_title);
             }
             else {
-                let member = data.member;
                 displayStatusImage(false);
-                setT("name", `${member.first_name} ${member.last_name}`);
-                setT("school", member.school);
-                setT('ticket-title', data.ticket_title);
-                if(member.sports.length == 0) {
-                    setT("sports", 'No sports');    
-                }
-                else {
-                    let sports_list = document.createElement('ul');
-                    for(const sport of member.sports) {
-                        let sport_item = document.createElement('li');
-                        sport_item.innerHTML = sport;
-                        sports_list.appendChild(sport_item);
-                    }
-                    document.getElementById('sports').appendChild(sports_list);
-                }
-                processCuffsAndMeals(data.ticket_title);
+                displayMember(data.member, data.ticket_title);
             }
         });
     }

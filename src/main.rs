@@ -871,6 +871,8 @@ pub async fn get_mark(mut db: Connection<Attendize>, uuid: &str, reference: &str
     }
     else if has_arrived {
         response.message = format!("{} {} ticket has already been scanned at {}", member.first_name, member.last_name, arrival_time.unwrap());
+        response.member = Some(member);
+        response.ticket_title = ticket_title;
         return Some(Json(response));
     }
 
