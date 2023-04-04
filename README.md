@@ -1,8 +1,10 @@
-# PegAlpha
+# pegalpha
 
-Système de gestion des équipes et de check-in.
+Système de gestion des équipes sportives et de check-in.
 
 Développé à l'occasion des European Aerostudent Games 2023.
+
+![landing page](https://github.com/storca/pegalpha/blob/master/screenshots/welcome.png?raw=true)
 
 ## Description
 
@@ -26,7 +28,7 @@ La vérification et l'inscription des équipes n'est pas triviale puisque il y a
 * Export d'une équipe en PDF monochrome (wkhtmltopdf)
 * Check-in augmenté (couleurs des bracelets à mettre, tickets repas à donner)
 
-## Règles de composition à configurer pour chaque sport
+## Règles de composition à configurer pour chaque sport
 
 * Mixité ou non du sport (strict ou mixed)
 * Intervalle du nombre de joueurs acceptables (différent selon si le sport est strict ou mixte, obligatoire)
@@ -88,10 +90,28 @@ L'organisation du code pourrait être améliorée.
 ## Captures d'écran
 ### Landing page
 
+![landing page](https://github.com/storca/pegalpha/blob/master/screenshots/welcome.png?raw=true)
+
 ### Composition d'une équipe
+
+![team composition](https://github.com/storca/pegalpha/blob/master/screenshots/compose.png?raw=true)
+
+### Succès d'inscription d'une équipe (animé)
+
+![team registration success](https://github.com/storca/pegalpha/blob/master/screenshots/team-success.png?raw=true)
 
 ### Liste des équipes
 
+![team list](https://github.com/storca/pegalpha/blob/master/screenshots/team-list.png?raw=true)
+
+### Liste des membres d'une équipe
+
+Omis, pour des raisons évidentes de confidentialité.
+
 ### Liste des sans-équipe, par sport
 
+![no team](https://github.com/storca/pegalpha/blob/master/screenshots/no-team-list.png?raw=true)
+
 ### Résultat de check-in
+
+![check in result](https://github.com/storca/pegalpha/blob/master/screenshots/check-in.png?raw=true)
